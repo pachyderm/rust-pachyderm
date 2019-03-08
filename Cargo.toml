@@ -21,3 +21,8 @@ failure = "0.1.5"
 regex = "1.1.2"
 walkdir = "2"
 tower-grpc-build = { git = "https://github.com/tower-rs/tower-grpc" }
+
+[dev-dependencies]
+http = "0.1"
+tokio = "0.1"
+futures = "0.1"
