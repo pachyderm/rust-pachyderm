@@ -1,10 +1,11 @@
 extern crate bytes;
 extern crate prost;
-#[macro_use] extern crate prost_derive;
+#[macro_use]
+extern crate prost_derive;
 extern crate prost_types;
-extern crate tower_h2;
 extern crate tower_add_origin;
 extern crate tower_grpc;
+extern crate tower_h2;
 extern crate tower_service;
 extern crate tower_util;
 

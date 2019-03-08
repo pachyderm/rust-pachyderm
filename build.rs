@@ -1,27 +1,24 @@
-#[macro_use] extern crate failure;
+#[macro_use]
+extern crate failure;
 extern crate regex;
 extern crate tower_grpc_build;
 extern crate walkdir;
 
+use std::env;
+use std::fs::{create_dir_all, File};
+use std::io::{Error as IoError, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::exit;
-use std::env;
-use std::fs::{File, create_dir_all};
-use std::io::{Error as IoError, Read, Write};
 
 use regex::Regex;
-use walkdir::{DirEntry, WalkDir, Error as WalkDirError};
+use walkdir::{DirEntry, Error as WalkDirError, WalkDir};
 
 #[derive(Debug, Fail)]
 enum BuildError {
     #[fail(display = "Could not walk dir, have you run `make init`?: {}", err)]
-    WalkDir {
-        err: WalkDirError,
-    },
+    WalkDir { err: WalkDirError },
     #[fail(display = "{}", err)]
-    Io {
-        err: IoError,
-    },
+    Io { err: IoError },
 }
 
 impl From<WalkDirError> for BuildError {
@@ -37,7 +34,8 @@ impl From<IoError> for BuildError {
 }
 
 fn find<P>(root: P, min_depth: usize, max_depth: usize, ext: &str) -> Result<Vec<DirEntry>, WalkDirError>
-where P: AsRef<Path>
+where
+    P: AsRef<Path>,
 {
     let entries: Result<Vec<DirEntry>, WalkDirError> = WalkDir::new(root)
         .min_depth(min_depth)
@@ -52,7 +50,8 @@ where P: AsRef<Path>
     // We have to do a second pass on the walked results and filter out dirs,
     // because if we do it on the first pass, walkdir won't recurse into
     // directories
-    let entries: Vec<DirEntry> = entries?.into_iter()
+    let entries: Vec<DirEntry> = entries?
+        .into_iter()
         .filter(|e| {
             let actual_ext = e.path().extension().map(|s| s.to_str());
             actual_ext == Some(Some(ext))
@@ -63,8 +62,9 @@ where P: AsRef<Path>
 }
 
 fn with_file_contents<F, P>(src: P, dest: &Path, f: F) -> Result<(), BuildError>
-where F: FnOnce(String) -> String,
-      P: AsRef<Path>
+where
+    F: FnOnce(String) -> String,
+    P: AsRef<Path>,
 {
     let mut contents = String::new();
     File::open(src)?.read_to_string(&mut contents)?;
@@ -82,7 +82,7 @@ fn run() -> Result<(), BuildError> {
         let dest = Path::new("./proto/client").join(src.strip_prefix("./proto/pachyderm/src/client").unwrap());
 
         create_dir_all(dest.parent().unwrap())?;
-        
+
         with_file_contents(src, &dest, |contents| {
             gogo_matcher.replace_all(&contents, "").to_string()
         })?;
