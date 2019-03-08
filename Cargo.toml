@@ -1,0 +1,23 @@
+[package]
+name = "pachyderm"
+version = "0.1.0"
+authors = ["Yusuf Simonson <simonson@gmail.com>"]
+edition = "2018"
+build = "build.rs"
+
+[dependencies]
+bytes = "0.4.7"
+prost = "0.4.0"
+prost-derive = "0.4.0"
+prost-types = "0.4.0"
+tower-h2 = { git = "https://github.com/tower-rs/tower-h2" }
+tower-add-origin = { git = "https://github.com/tower-rs/tower-http" }
+tower-grpc = { git = "https://github.com/tower-rs/tower-grpc" }
+tower-service = "0.2"
+tower-util = { git = "https://github.com/tower-rs/tower" }
+
+[build-dependencies]
+failure = "0.1.5"
+regex = "1.1.2"
+walkdir = "2"
+tower-grpc-build = { git = "https://github.com/tower-rs/tower-grpc" }
