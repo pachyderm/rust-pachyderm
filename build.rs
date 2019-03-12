@@ -1,16 +1,14 @@
 #[macro_use]
 extern crate failure;
-extern crate regex;
 extern crate tower_grpc_build;
 extern crate walkdir;
 
 use std::env;
-use std::fs::{create_dir_all, File};
+use std::fs::File;
 use std::io::{Error as IoError, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::exit;
 
-use regex::Regex;
 use walkdir::{DirEntry, Error as WalkDirError, WalkDir};
 
 #[derive(Debug, Fail)]
@@ -33,13 +31,11 @@ impl From<IoError> for BuildError {
     }
 }
 
-fn find<P>(root: P, min_depth: usize, max_depth: usize, ext: &str) -> Result<Vec<DirEntry>, WalkDirError>
+fn find<P>(root: P, ext: &str) -> Result<Vec<DirEntry>, WalkDirError>
 where
     P: AsRef<Path>,
 {
     let entries: Result<Vec<DirEntry>, WalkDirError> = WalkDir::new(root)
-        .min_depth(min_depth)
-        .max_depth(max_depth)
         .into_iter()
         .filter_entry(|e| {
             let actual_ext = e.path().extension().map(|s| s.to_str());
@@ -74,32 +70,18 @@ where
 }
 
 fn run() -> Result<(), BuildError> {
-    let gogo_matcher = Regex::new("import.*gogo\\.proto.*;|\\[.*gogoproto.*\\]").unwrap();
-    let mut compilable_protos = Vec::new();
-
-    for proto in find("./proto/pachyderm/src/client", 1, 4, "proto")? {
-        let src = proto.path();
-        let dest = Path::new("./proto/client").join(src.strip_prefix("./proto/pachyderm/src/client").unwrap());
-
-        create_dir_all(dest.parent().unwrap())?;
-
-        with_file_contents(src, &dest, |contents| {
-            gogo_matcher.replace_all(&contents, "").to_string()
-        })?;
-
-        compilable_protos.push(dest);
-    }
+    let protos: Vec<PathBuf> = find("./proto", "proto")?.into_iter().map(|e| e.into_path()).collect();
 
     tower_grpc_build::Config::new()
         .enable_client(true)
-        .build(&compilable_protos, &["./proto".into()])?;
+        .build(&protos.as_slice(), &["./proto".into()])?;
 
     // TODO: it seems like prost has substitutions for well-known types built
     // in, but tower-grpc-build doesn't use it:
     // https://github.com/danburkert/prost/blob/2f5d570ce4989b87980f989829577a564da37cb2/prost-build/src/extern_paths.rs
     // Figure out why, so we can remove this hack.
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR environment variable not set"));
-    for rs in find(out_dir, 0, 1, "rs")? {
+    for rs in find(out_dir, "rs")? {
         let path = rs.into_path();
 
         with_file_contents(&path, &path, |contents| {

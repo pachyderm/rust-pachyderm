@@ -1,3 +1,0 @@
-[submodule "proto/pachyderm"]
-	path = proto/pachyderm
-	url = https://github.com/pachyderm/pachyderm

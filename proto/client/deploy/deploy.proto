@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package deploy;
+option go_package = "github.com/pachyderm/pachyderm/src/client/deploy";
+
+message DeployStorageSecretRequest {
+    map<string, bytes> secrets = 1;
+}
+
+message DeployStorageSecretResponse {}
+
+service API {
+  rpc DeployStorageSecret(DeployStorageSecretRequest) returns (DeployStorageSecretResponse) {}
+}
