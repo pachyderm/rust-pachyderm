@@ -1,3 +1,3 @@
-# pachyderm.rs
+# Rust Pachyderm
 
 Official Rust Pachyderm client
