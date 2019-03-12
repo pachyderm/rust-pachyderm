@@ -16,11 +16,7 @@ bytes = "0.4.7"
 prost = "0.4.0"
 prost-derive = "0.4.0"
 prost-types = "0.4.0"
-tower-h2 = { git = "https://github.com/tower-rs/tower-h2" }
-tower-add-origin = { git = "https://github.com/tower-rs/tower-http" }
 tower-grpc = { git = "https://github.com/tower-rs/tower-grpc" }
-tower-service = "0.2"
-tower-util = { git = "https://github.com/tower-rs/tower" }
 
 [build-dependencies]
 failure = "0.1.5"
@@ -31,3 +27,7 @@ tower-grpc-build = { git = "https://github.com/tower-rs/tower-grpc" }
 http = "0.1"
 tokio = "0.1"
 futures = "0.1"
+tower-add-origin = { git = "https://github.com/tower-rs/tower-http" }
+tower-h2 = { git = "https://github.com/tower-rs/tower-h2" }
+tower-service = "0.2"
+tower-util = { git = "https://github.com/tower-rs/tower" }
