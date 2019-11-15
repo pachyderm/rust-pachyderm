@@ -10,32 +10,20 @@ pub mod auth {
     include!(concat!(env!("OUT_DIR"), "/auth.rs"));
 }
 
-pub mod auth_1_7 {
+mod auth_1_7 {
     include!(concat!(env!("OUT_DIR"), "/auth_1_7.rs"));
 }
 
-pub mod config {
-    include!(concat!(env!("OUT_DIR"), "/config.rs"));
+mod auth_1_8 {
+    include!(concat!(env!("OUT_DIR"), "/auth_1_8.rs"));
 }
 
 pub mod debug {
     include!(concat!(env!("OUT_DIR"), "/debug.rs"));
 }
 
-pub mod deploy {
-    include!(concat!(env!("OUT_DIR"), "/deploy.rs"));
-}
-
 pub mod enterprise {
     include!(concat!(env!("OUT_DIR"), "/enterprise.rs"));
-}
-
-pub mod enterprise_1_7 {
-    include!(concat!(env!("OUT_DIR"), "/enterprise_1_7.rs"));
-}
-
-pub mod hashtree_1_7 {
-    include!(concat!(env!("OUT_DIR"), "/hashtree_1_7.rs"));
 }
 
 pub mod health {
@@ -46,22 +34,30 @@ pub mod pfs {
     include!(concat!(env!("OUT_DIR"), "/pfs.rs"));
 }
 
-pub mod pfs_1_7 {
+mod pfs_1_7 {
     include!(concat!(env!("OUT_DIR"), "/pfs_1_7.rs"));
+}
+
+mod pfs_1_8 {
+    include!(concat!(env!("OUT_DIR"), "/pfs_1_8.rs"));
 }
 
 pub mod pps {
     include!(concat!(env!("OUT_DIR"), "/pps.rs"));
 }
 
-pub mod pps_1_7 {
+mod pps_1_7 {
     include!(concat!(env!("OUT_DIR"), "/pps_1_7.rs"));
 }
 
-pub mod shard {
-    include!(concat!(env!("OUT_DIR"), "/shard.rs"));
+mod pps_1_8 {
+    include!(concat!(env!("OUT_DIR"), "/pps_1_8.rs"));
 }
 
-pub mod versionpb {
+pub mod transaction {
+    include!(concat!(env!("OUT_DIR"), "/transaction.rs"));
+}
+
+pub mod version {
     include!(concat!(env!("OUT_DIR"), "/versionpb.rs"));
 }

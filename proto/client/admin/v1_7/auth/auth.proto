@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-package auth;
-option go_package = "github.com/pachyderm/pachyderm/src/client/auth";
+package auth_1_7;
+option go_package = "github.com/pachyderm/pachyderm/src/client/admin/v1_7/auth";
 
 
 import "google/protobuf/timestamp.proto";
@@ -25,6 +25,7 @@ import "google/protobuf/timestamp.proto";
  * 3) Pachyderm pipelines:
  *      "pipeline:terasort"
  */
+
 
 //// Activation API
 
@@ -92,11 +93,6 @@ message IDProvider {
     string group_attribute = 3;
   }
   SAMLOptions saml = 3 ;
-
-  // GitHubOptions is an empty protobuf message whose presence in the IDProvider
-  // of an AuthConfig indicates that GitHub auth should be enabled.
-  message GitHubOptions{}
-  GitHubOptions github = 4 ;
 }
 
 // Configure Pachyderm's auth system (particularly authentication backends
@@ -367,8 +363,7 @@ message GetAuthTokenRequest {
   // subject
   string subject = 1;
 
-  // ttl indicates the requested (approximate) remaining lifetime of this token,
-  // in seconds
+  // ttl indicates the approximate remaining lifetime of this token, in seconds
   int64 ttl = 2 ;
 }
 
@@ -438,20 +433,10 @@ message GetOneTimePasswordRequest {
   // authentication code for the caller if username is unset or set to the
   // caller's username (and will return an error otherwise)
   string subject = 1;
-
-  // ttl indicates the requested (approximate) remaining lifetime of this token,
-  // in seconds
-  int64 ttl = 2 ;
 }
 
 message GetOneTimePasswordResponse {
-  // 'code' is the string that must be presented in
-  // AuthenticateRequest.one_time_password to login as
-  // GetOneTimePasswordRequest.subject
   string code = 1;
-
-  // expiration is the time at which the token in 'code' will expire
-  google.protobuf.Timestamp otp_expiration = 2 ;
 }
 
 service API {

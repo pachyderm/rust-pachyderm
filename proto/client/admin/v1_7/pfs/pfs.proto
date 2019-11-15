@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-package pfs;
-option go_package = "github.com/pachyderm/pachyderm/src/client/pfs";
+package pfs_1_7;
+option go_package = "github.com/pachyderm/pachyderm/src/client/admin/v1_7/pfs";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
@@ -9,7 +9,7 @@ import "google/protobuf/wrappers.proto";
 
 
 
-import "client/auth/auth.proto";
+import "client/admin/v1_7/auth/auth.proto";
 
 ////  PFS Data structures (stored in etcd)
 
@@ -65,30 +65,20 @@ message RepoInfo {
 
   // Set by ListRepo and InspectRepo if Pachyderm's auth system is active, but
   // not stored in etcd. To set a user's auth scope for a repo, use the
-  // Pachyderm Auth API (in src/client/auth/auth.proto)
+  // Pachyderm Auth API (in src/client/admin/v1_7/auth/auth.proto)
   RepoAuthInfo auth_info = 6;
 }
 
 // RepoAuthInfo includes the caller's access scope for a repo, and is returned
 // by ListRepo and InspectRepo but not persisted in etcd. It's used by the
 // Pachyderm dashboard to render repo access appropriately. To set a user's auth
-// scope for a repo, use the Pachyderm Auth API (in src/client/auth/auth.proto)
+// scope for a repo, use the Pachyderm Auth API (in src/client/admin/v1_7/auth/auth.proto)
 message RepoAuthInfo {
   // The callers access level to the relevant repo (e.g. may be OWNER even if
   // the user isn't an OWNER of the repo, if they're an admin for the cluster)
-  auth.Scope access_level = 1;
+  auth_1_7.Scope access_level = 1;
 }
 
-// These are the different places where a commit may be originated from
-enum OriginKind {
-  USER = 0;
-  AUTO = 1;
-  FSCK = 2;
-}
-
-message CommitOrigin {
-  OriginKind kind = 1;
-}
 // Commit is a reference to a commit (e.g. the collection of branches and the
 // collection of currently-open commits in etcd are collections of Commit
 // protos)
@@ -104,20 +94,9 @@ message CommitRange {
   Commit upper = 2;
 }
 
-// CommitProvenance keeps track of where (i.e. which branch) a certain commit
-// originated from. A commit's provenance consists of the commits of
-// the commits which are in its causal history.
-message CommitProvenance {
-  Commit commit = 1;
-  Branch branch = 2;
-}
-
 // CommitInfo is the main data structure representing a commit in etcd
 message CommitInfo {
-  reserved 6, 10;
   Commit commit = 1;
-  Branch branch = 15;
-  CommitOrigin origin = 17;
   // description is a user-provided script describing this commit
   string description = 8;
   Commit parent_commit = 2;
@@ -126,8 +105,11 @@ message CommitInfo {
   google.protobuf.Timestamp finished = 4;
   uint64 size_bytes = 5;
 
-  // the commits and their original branches on which this commit is provenant
-  repeated CommitProvenance provenance = 16;
+  // Commits on which this commit is provenant. provenance[i] is a commit in
+  // branch_provenance[i] (a branch name, and one of the branches on which this
+  // commit's branch is provenant)
+  repeated Commit provenance = 6;
+  repeated Branch branch_provenance = 10;
 
   // ReadyProvenance is the number of provenant commits which have been
   // finished, if ReadyProvenance == len(Provenance) then the commit is ready
@@ -141,8 +123,6 @@ message CommitInfo {
   // will also be nil) or is the output commit of a failed job (in which case
   // 'finished' will have a value -- the end time of the job)
   Object tree = 7;
-  repeated Object trees = 13;
-  Object datums = 14;
 }
 
 enum FileType {
@@ -155,12 +135,10 @@ message FileInfo {
   File file = 1;
   FileType file_type = 2;
   uint64 size_bytes = 3;
-  google.protobuf.Timestamp committed = 10;
   // the base names (i.e. just the filenames, not the full paths) of
   // the children
   repeated string children = 6;
   repeated Object objects = 8;
-  repeated BlockRef blockRefs = 9;
   bytes hash = 7;
 }
 
@@ -177,19 +155,6 @@ message BlockRef {
 message ObjectInfo {
   Object object = 1;
   BlockRef block_ref = 2;
-}
-
-message Merge {
-  repeated string prefixes = 1;
-}
-
-message Shard {
-  PathRange range = 1;
-}
-
-message PathRange {
-  string lower = 1;
-  string upper = 2;
 }
 
 // PFS API
@@ -228,27 +193,22 @@ enum CommitState {
 }
 
 message StartCommitRequest {
-  reserved 2;
   // Parent.ID may be empty in which case the commit that Branch points to will be used as the parent.
   // If branch is empty, or if branch does not exist, the commit will have no parent.
   Commit parent = 1;
   // description is a user-provided string describing this commit
   string description = 4;
   string branch = 3;
-  repeated CommitProvenance provenance = 5;
+  repeated Commit provenance = 2;
 }
 
 message BuildCommitRequest {
-  reserved 2;
   Commit parent = 1;
   string branch = 4;
-  repeated CommitProvenance provenance = 6;
+  repeated Commit provenance = 2;
   Object tree = 3;
-  repeated Object trees = 7;
-  Object datums = 8;
   // ID sets the ID of the created commit.
   string ID = 5;
-  uint64 size_bytes = 9;
 }
 
 message FinishCommitRequest {
@@ -258,9 +218,6 @@ message FinishCommitRequest {
   string description = 2;
 
   Object tree = 3;
-  repeated Object trees = 5;
-  Object datums = 7;
-  uint64 size_bytes = 6;
   // If set, 'commit' will be closed (its 'finished' field will be set to the
   // current time) but its 'tree' will be left nil.
   bool empty = 4;
@@ -277,7 +234,6 @@ message ListCommitRequest {
   Commit from = 2;
   Commit to = 3;
   uint64 number = 4;
-  bool reverse = 5;  // Return commits oldest to newest
 }
 
 message CommitInfos {
@@ -300,7 +256,6 @@ message InspectBranchRequest {
 
 message ListBranchRequest {
   Repo repo = 1;
-  bool reverse = 2; // Returns branches oldest to newest
 }
 
 message DeleteBranchRequest {
@@ -320,7 +275,6 @@ message FlushCommitRequest {
 message SubscribeCommitRequest {
   Repo repo = 1;
   string branch = 2;
-  CommitProvenance prov = 5;
   // only commits created since this commit are returned
   Commit from = 3;
   // Don't return commits until they're in (at least) the desired state.
@@ -338,7 +292,6 @@ enum Delimiter {
   JSON = 1;
   LINE = 2;
   SQL = 3;
-  CSV = 4;
 }
 
 // An OverwriteIndex specifies the index of objects from which new writes
@@ -349,8 +302,14 @@ message OverwriteIndex {
   int64 index = 1;
 }
 
+// Metadata struct allows us to distinguish between cases where header/footer
+// are not specified vs explicitly empty
+message Metadata {
+	bytes value = 1;
+}
+
 message PutFileRequest {
-  reserved 2, 4;
+  reserved 2;
   File file = 1;
   bytes value = 3;
   string url = 5;
@@ -366,26 +325,11 @@ message PutFileRequest {
   // TargetFileBytes specifies the target number of bytes in each written
   // file, files may have more or fewer bytes than the target.
   int64 target_file_bytes = 9;
-  // header_records is an option for splitting data when 'delimiter' is not NONE
-  // (or SQL). It specifies the number of records that are converted to a
-  // header and applied to all file shards.
-  //
-  // This is particularly useful for CSV files, where the first row often
-  // contains column titles; if 'header_records' is set to one in that case,
-  // the first row will be associated with the directory that contains the rest
-  // of the split-up csv rows as files, and if any data is retrieved from that
-  // directory by GetFile, it will appear to begin with that first row of
-  // column labels (including in pipeline workers).
-  //
-  // Note that SQL files have their own logic for determining headers (their
-  // header is not a number of records, but a collection of SQL commands that
-  // create the relevant tables and such). This way, SQL files retrieved by
-  // GetFile can be passed to psql, and they will set up the appropriate tables
-  // before inserting the records in the files that were retrieved.
-  int64 header_records = 11;
   // overwrite_index is the object index where the write starts from.  All
   // existing objects starting from the index are deleted.
   OverwriteIndex overwrite_index = 10;
+  Metadata header = 11;
+  Metadata footer = 12;
 }
 
 // PutFileRecord is used to record PutFile requests in etcd temporarily.
@@ -414,33 +358,14 @@ message InspectFileRequest {
 }
 
 message ListFileRequest {
-  // File is the parent directory of the files we want to list. This sets the
-  // repo, the commit/branch, and path prefix of files we're interested in
-  // If the "path" field is omitted, a list of files at the top level of the repo
-  // is returned
+  // File is the parent directory of the files we want to list. This fixes the
+  // repo, the commit/branch, and path prefix of files we're interested it
   File file = 1;
 
   // Full indicates whether the result should include file contents, which may
   // be large (i.e. the list of children for directories, and the list of object
   // references for regular files)
   bool full = 2;
-
-  // History indicates how many historical versions you want returned. Its
-  // semantics are:
-  // 0: Return the files as they are at the commit in `file`. FileInfo.File
-  //    will equal File in this request.
-  // 1: Return the files as they are in the last commit they were modified in.
-  //    (This will have the same hash as if you'd passed 0, but
-  //    FileInfo.File.Commit will be different.
-  // 2: Return the above and the files as they are in the next-last commit they
-  //    were modified in.
-  // 3: etc.
-  //-1: Return all historical versions.
-  int64 history = 3;
-}
-
-message WalkFileRequest {
-    File file = 1;
 }
 
 message GlobFileRequest {
@@ -468,15 +393,6 @@ message DiffFileResponse {
 
 message DeleteFileRequest {
   File file = 1;
-}
-
-message FsckRequest {
-  bool fix = 1;
-}
-
-message FsckResponse {
-  string fix = 1;
-  string error = 2;
 }
 
 service API {
@@ -537,8 +453,6 @@ service API {
   // TODO(msteffen): When the dash has been updated to use ListFileStream,
   // replace ListFile with this RPC (https://github.com/pachyderm/dash/issues/201)
   rpc ListFileStream(ListFileRequest) returns (stream FileInfo) {}
-  // WalkFile walks over all the files under a directory, including children of children.
-  rpc WalkFile(WalkFileRequest) returns (stream FileInfo) {}
   // GlobFile returns info about all files. This is deprecated in favor of
   // GlobFileStream
   rpc GlobFile(GlobFileRequest) returns (FileInfos) {}
@@ -553,53 +467,23 @@ service API {
 
   // DeleteAll deletes everything
   rpc DeleteAll(google.protobuf.Empty) returns (google.protobuf.Empty) {}
-  // Fsck does a file system consistency check for pfs
-  rpc Fsck(FsckRequest) returns (stream FsckResponse) {}
 }
 
 message PutObjectRequest {
   bytes value = 1;
   repeated Tag tags = 2;
-  Block block = 3;
-}
-
-message CreateObjectRequest {
-  Object object = 1;
-  BlockRef block_ref = 2;
 }
 
 message GetObjectsRequest {
   repeated Object objects = 1;
   uint64 offset_bytes = 2;
-  // The number of bytes requested.
+  // The number of bytes we intend to read.
   uint64 size_bytes = 3;
   // The total amount of bytes in these objects.  It's OK if it's not
   // entirely accurate or if it's unknown (in which case it'd be set to 0).
   // It's used primarily as a hint for cache eviction.
   uint64 total_size = 4;
 }
-
-message PutBlockRequest {
-  Block block = 1;
-  bytes value = 2;
-}
-
-message GetBlockRequest {
-  Block block = 1;
-}
-
-message GetBlocksRequest {
-  repeated BlockRef blockRefs = 1;
-  uint64 offset_bytes = 2;
-  // The number of bytes requested.
-  uint64 size_bytes = 3;
-  // The total amount of bytes in these blocks.  It's OK if it's not
-  // entirely accurate or if it's unknown (in which case it'd be set to 0).
-  // It's used primarily as a hint for cache eviction.
-  uint64 total_size = 4;
-}
-
-message ListBlockRequest {}
 
 message TagObjectRequest {
   Object object = 1;
@@ -645,20 +529,14 @@ message Objects {
 service ObjectAPI {
   rpc PutObject(stream PutObjectRequest) returns (Object) {}
   rpc PutObjectSplit(stream PutObjectRequest) returns (Objects) {}
-  rpc PutObjects(stream PutObjectRequest) returns (google.protobuf.Empty) {}
-  rpc CreateObject(CreateObjectRequest) returns (google.protobuf.Empty) {}
   rpc GetObject(Object) returns (stream google.protobuf.BytesValue) {}
   rpc GetObjects(GetObjectsRequest) returns (stream google.protobuf.BytesValue) {}
-  rpc PutBlock(stream PutBlockRequest) returns (google.protobuf.Empty) {}
-  rpc GetBlock(GetBlockRequest) returns (stream google.protobuf.BytesValue) {}
-  rpc GetBlocks(GetBlocksRequest) returns (stream google.protobuf.BytesValue) {}
-  rpc ListBlock(ListBlockRequest) returns (stream Block) {}
   rpc TagObject(TagObjectRequest) returns (google.protobuf.Empty) {}
   rpc InspectObject(Object) returns (ObjectInfo) {}
   // CheckObject checks if an object exists in the blob store without
   // actually reading the object.
   rpc CheckObject(CheckObjectRequest) returns (CheckObjectResponse) {}
-  rpc ListObjects(ListObjectsRequest) returns (stream ObjectInfo) {}
+  rpc ListObjects(ListObjectsRequest) returns (stream Object) {}
   rpc DeleteObjects(DeleteObjectsRequest) returns (DeleteObjectsResponse) {}
   rpc GetTag(Tag) returns (stream google.protobuf.BytesValue) {}
   rpc InspectTag(Tag) returns (ObjectInfo) {}

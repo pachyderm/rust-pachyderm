@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-package pps_1_7;
-option go_package = "github.com/pachyderm/pachyderm/src/client/admin/1_7/pps";
+package pps_1_8;
+option go_package = "github.com/pachyderm/pachyderm/src/client/admin/v1_8/pps";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
@@ -9,7 +9,7 @@ import "google/protobuf/duration.proto";
 
 
 
-import "client/admin/1_7/pfs/pfs.proto";
+import "client/admin/v1_8/pfs/pfs.proto";
 
 message Secret {
   // Name must be the name of the secret in kubernetes.
@@ -31,6 +31,7 @@ message Transform {
   bool debug = 7;
   string user = 10;
   string working_dir = 11;
+  string dockerfile = 12;
 }
 
 message Egress {
@@ -47,6 +48,7 @@ enum JobState {
   JOB_FAILURE = 2;
   JOB_SUCCESS = 3;
   JOB_KILLED = 4;
+  JOB_MERGING = 5;
 }
 
 message Service {
@@ -55,6 +57,11 @@ message Service {
   string ip = 3 ;
 }
 
+message Spout {
+  bool overwrite = 1;
+}
+
+// Note: this is deprecated and replaced by `PfsInput`
 message AtomInput {
   reserved 7;
   string name = 1;
@@ -69,11 +76,27 @@ message AtomInput {
   bool empty_files = 8;
 }
 
+message PFSInput {
+  string name = 1;
+  string repo = 2;
+  string branch = 3;
+  string commit = 4;
+  string glob = 5;
+  bool lazy = 6;
+  // EmptyFiles, if true, will cause files from this PFS input to be
+  // presented as empty files. This is useful in shuffle pipelines where you
+  // want to read the names of files and reorganize them using symlinks.
+  bool empty_files = 7;
+}
+
 message CronInput {
   string name = 1;
   string repo = 2;
   string commit = 3;
   string spec = 4;
+  // Overwrite, if true, will expose a single datum that gets overwritten each
+  // tick. If false, it will create a new datum for each tick.
+  bool overwrite = 6;
   google.protobuf.Timestamp start = 5;
 }
 
@@ -85,7 +108,9 @@ message GitInput {
 }
 
 message Input {
+  // Note: this is deprecated and replaced by `PfsInput`
   AtomInput atom = 1;
+  PFSInput pfs = 6;
   repeated Input cross = 2;
   repeated Input union = 3;
   CronInput cron = 4;
@@ -94,7 +119,7 @@ message Input {
 
 message JobInput {
   string name = 4;
-  pfs_1_7.Commit commit = 1;
+  pfs_1_8.Commit commit = 1;
   string glob = 2;
   bool lazy = 3;
 }
@@ -150,8 +175,8 @@ message DatumInfo {
   Datum datum = 1;
   DatumState state = 2;
   ProcessStats stats = 3;
-  pfs_1_7.File pfs_state = 4;
-  repeated pfs_1_7.FileInfo data = 5;
+  pfs_1_8.File pfs_state = 4;
+  repeated pfs_1_8.FileInfo data = 5;
 }
 
 message Aggregate {
@@ -181,7 +206,7 @@ message AggregateProcessStats {
 message WorkerStatus {
   string worker_id = 1 ;
   string job_id = 2 ;
-  repeated InputFile data = 3;
+  repeated pps_1_8.InputFile data = 3;
   // Started is the time processing on the current datum began.
   google.protobuf.Timestamp started = 4;
   ProcessStats stats = 5;
@@ -191,6 +216,8 @@ message WorkerStatus {
 // ResourceSpec describes the amount of resources that pipeline pods should
 // request from kubernetes, for scheduling.
 message ResourceSpec {
+  reserved 3;
+
   // The number of CPUs each worker needs (partial values are allowed, and
   // encouraged)
   float cpu = 1;
@@ -199,12 +226,19 @@ message ResourceSpec {
   // SI suffixes (M, K, G, Mi, Ki, Gi, etc).
   string memory = 2;
 
-  // The number of GPUs each worker needs.
-  int64 gpu = 3;
+  // The spec for GPU resources.
+  GPUSpec gpu = 5;
 
   // The amount of ephemeral storage each worker needs (in bytes, with allowed
   // SI suffixes (M, K, G, Mi, Ki, Gi, etc).
   string disk = 4;
+}
+
+message GPUSpec {
+  // The type of GPU (nvidia.com/gpu or amd.com/gpu for example).
+  string type = 1;
+  // The number of GPUs to request.
+  int64 number = 2;
 }
 
 // EtcdJobInfo is the portion of the JobInfo that gets stored in etcd during
@@ -213,7 +247,7 @@ message ResourceSpec {
 message EtcdJobInfo {
   Job job = 1;
   Pipeline pipeline = 2;
-  pfs_1_7.Commit output_commit = 3;
+  pfs_1_8.Commit output_commit = 3;
   // Job restart count (e.g. due to datum failure)
   uint64 restart = 4;
 
@@ -226,7 +260,7 @@ message EtcdJobInfo {
   // Download/process/upload time and download/upload bytes
   ProcessStats stats = 9;
 
-  pfs_1_7.Commit stats_commit = 10;
+  pfs_1_8.Commit stats_commit = 10;
   JobState state = 11;
   string reason = 12;
   google.protobuf.Timestamp started = 13;
@@ -234,7 +268,7 @@ message EtcdJobInfo {
 }
 
 message JobInfo {
-  reserved 4, 5;
+  reserved 4, 5, 28;
   Job job = 1;
   Transform transform = 2;
   Pipeline pipeline = 3;
@@ -244,11 +278,12 @@ message JobInfo {
   Job parent_job = 6;
   google.protobuf.Timestamp started = 7;
   google.protobuf.Timestamp finished = 8;
-  pfs_1_7.Commit output_commit = 9;
+  pfs_1_8.Commit output_commit = 9;
   JobState state = 10;
   string reason = 35;  // reason explains why the job is in the current state
   Service service = 14;
-  pfs_1_7.Repo output_repo = 18;
+  Spout spout = 45;
+  pfs_1_8.Repo output_repo = 18;
   string output_branch = 17;
   uint64 restart = 20;
   int64 data_processed = 22;
@@ -260,9 +295,8 @@ message JobInfo {
   ResourceSpec resource_requests = 25;
   ResourceSpec resource_limits = 36;
   Input input = 26;
-  pfs_1_7.BranchInfo new_branch = 27;
-  bool incremental = 28;
-  pfs_1_7.Commit stats_commit = 29;
+  pfs_1_8.BranchInfo new_branch = 27;
+  pfs_1_8.Commit stats_commit = 29;
   bool enable_stats = 32;
   string salt = 33;
   bool batch = 34;
@@ -272,6 +306,7 @@ message JobInfo {
   int64 datum_tries = 41;
   SchedulingSpec scheduling_spec = 42;
   string pod_spec = 43;
+  string pod_patch = 44;
 }
 
 enum WorkerState {
@@ -295,11 +330,11 @@ message Pipeline {
 
 message PipelineInput {
   string name = 5;
-  pfs_1_7.Repo repo = 1;
+  pfs_1_8.Repo repo = 1;
   string branch = 2;
   string glob = 3;
   bool lazy = 4;
-  pfs_1_7.Commit from = 6;
+  pfs_1_8.Commit from = 6;
 }
 
 enum PipelineState {
@@ -329,19 +364,20 @@ enum PipelineState {
 message EtcdPipelineInfo {
   PipelineState state = 1;
   string reason = 4;
-  pfs_1_7.Commit spec_commit = 2;
+  pfs_1_8.Commit spec_commit = 2;
   map<int32, int32> job_counts = 3;
   string auth_token = 5;
+  JobState last_job_state = 6;
 }
 
 message PipelineInfo {
-  reserved 3, 4, 26;
+  reserved 3, 4, 22, 26;
   string id = 17 ;
   Pipeline pipeline = 1;
   uint64 version = 11;
   Transform transform = 2;
   ParallelismSpec parallelism_spec = 10;
-	HashtreeSpec hashtree_spec = 42;
+  HashtreeSpec hashtree_spec = 42;
   Egress egress = 15;
   google.protobuf.Timestamp created_at = 6;
 
@@ -353,17 +389,19 @@ message PipelineInfo {
   bool stopped = 38;
   string recent_error = 8;
 
-  // job_counts indicates the number of jobs within this pipeline in a given
-  // state. This is not stored in PFS along with the rest of this data
-  // structure--PPS.InspectPipeline fills it in
+  // job_counts and last_job_state indicates the number of jobs within this
+  // pipeline in a given state and the state of the most recently created job,
+  // respectively. This is not stored in PFS along with the rest of this data
+  // structure--PPS.InspectPipeline fills it in from the EtcdPipelineInfo.
   map<int32, int32> job_counts = 9;
+  JobState last_job_state = 43;
+
   string output_branch = 16;
   google.protobuf.Duration scale_down_threshold = 18;
   ResourceSpec resource_requests = 19;
   ResourceSpec resource_limits = 31;
   Input input = 20;
   string description = 21;
-  bool incremental = 22;
   string cache_size = 23;
   bool enable_stats = 24;
   string salt = 25;
@@ -373,15 +411,17 @@ message PipelineInfo {
   string reason = 28;
   int64 max_queue_size = 29;
   Service service = 30;
+  Spout spout = 45;
   ChunkSpec chunk_spec = 32;
   google.protobuf.Duration datum_timeout = 33;
   google.protobuf.Duration job_timeout = 34;
   string githook_url = 35 ;
-  pfs_1_7.Commit spec_commit = 36;
+  pfs_1_8.Commit spec_commit = 36;
   bool standby = 37;
   int64 datum_tries = 39;
   SchedulingSpec scheduling_spec = 40;
   string pod_spec = 41;
+  string pod_patch = 44;
 }
 
 message PipelineInfos {
@@ -391,24 +431,24 @@ message PipelineInfos {
 message CreateJobRequest {
   reserved 3, 4, 1, 10, 7, 9, 8, 12, 11, 13, 14, 21, 15, 16, 17, 18, 19, 20, 22, 23, 24;
   Pipeline pipeline = 2;
-  pfs_1_7.Commit output_commit = 25;
+  pfs_1_8.Commit output_commit = 25;
 }
 
 message InspectJobRequest {
   // Callers should set either Job or OutputCommit, not both.
   Job job = 1;
-  pfs_1_7.Commit output_commit = 3;
+  pfs_1_8.Commit output_commit = 3;
   bool block_state = 2; // block until state is either JOB_STATE_FAILURE or JOB_STATE_SUCCESS
 }
 
 message ListJobRequest {
   Pipeline pipeline = 1; // nil means all pipelines
-  repeated pfs_1_7.Commit input_commit = 2; // nil means all inputs
-  pfs_1_7.Commit output_commit = 3;
+  repeated pfs_1_8.Commit input_commit = 2; // nil means all inputs
+  pfs_1_8.Commit output_commit = 3;
 }
 
 message FlushJobRequest {
-  repeated pfs_1_7.Commit commits = 1;
+  repeated pfs_1_8.Commit commits = 1;
   repeated Pipeline to_pipelines = 2;
 }
 
@@ -523,7 +563,7 @@ message SchedulingSpec {
 }
 
 message CreatePipelineRequest {
-  reserved 3, 4;
+  reserved 3, 4, 15;
   Pipeline pipeline = 1;
   Transform transform = 2;
   ParallelismSpec parallelism_spec = 7;
@@ -536,7 +576,6 @@ message CreatePipelineRequest {
   ResourceSpec resource_limits = 22;
   Input input = 13;
   string description = 14;
-  bool incremental = 15;
   string cache_size = 16;
   bool enable_stats = 17;
   // Reprocess forces the pipeline to reprocess all datums.
@@ -545,6 +584,7 @@ message CreatePipelineRequest {
   bool batch = 19;
   int64 max_queue_size = 20;
   Service service = 21;
+  Spout spout = 33;
   ChunkSpec chunk_spec = 23;
   google.protobuf.Duration datum_timeout = 24;
   google.protobuf.Duration job_timeout = 25;
@@ -552,7 +592,8 @@ message CreatePipelineRequest {
   bool standby = 27;
   int64 datum_tries = 28;
   SchedulingSpec scheduling_spec = 29;
-  string pod_spec = 30;
+  string pod_spec = 30; // deprecated, use pod_patch below
+  string pod_patch = 32; // a json patch will be applied to the pipeline's pod_spec before it's created;
 }
 
 message InspectPipelineRequest {
@@ -579,8 +620,8 @@ message StopPipelineRequest {
 
 message RerunPipelineRequest {
   Pipeline pipeline = 1;
-  repeated pfs_1_7.Commit exclude = 2;
-  repeated pfs_1_7.Commit include = 3;
+  repeated pfs_1_8.Commit exclude = 2;
+  repeated pfs_1_8.Commit include = 3;
 }
 
 message GarbageCollectRequest {
