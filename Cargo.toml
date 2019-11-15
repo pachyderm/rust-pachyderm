@@ -22,3 +22,6 @@ tonic = { version = "0.1.0-alpha.6", features = ["rustls"] }
 failure = "0.1.6"
 walkdir = "2"
 tonic-build = "0.1.0-alpha.6"
+
+[dev-dependencies]
+tokio = "0.2.0-alpha.6"
