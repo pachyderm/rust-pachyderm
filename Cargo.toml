@@ -12,29 +12,13 @@ keywords = ["pachyderm", "kubernetes", "big data", "analytics", "data science"]
 categories = ["api-bindings", "science"]
 
 [dependencies]
-bytes = "0.4.7"
-prost = "0.4.0"
-prost-derive = "0.4.0"
-prost-types = "0.4.0"
-tower-grpc = "0.1.0"
+bytes = "0.4.12"
+prost = "0.5.0"
+prost-derive = "0.5.0"
+prost-types = "0.5.0"
+tonic = { version = "0.1.0-alpha.6", features = ["rustls"] }
 
 [build-dependencies]
-failure = "0.1.5"
+failure = "0.1.6"
 walkdir = "2"
-tower-grpc-build = "0.1.0"
-
-[dev-dependencies]
-http = "0.1"
-tokio = "0.1"
-futures = "0.1"
-tower-add-origin = "0.1.0"
-tower-h2 = "0.1.0"
-tower-service = "0.2"
-tower-util = "0.1.0"
-
-[patch.crates-io]
-tower-grpc = { path = "tower/tower-grpc" }
-tower-grpc-build = { path = "tower/tower-grpc/tower-grpc-build" }
-tower-add-origin = { path = "tower/tower-http/tower-add-origin" }
-tower-h2 = { path = "tower/tower-h2" }
-tower-util = { path = "tower/tower/tower-util" }
+tonic-build = "0.1.0-alpha.6"

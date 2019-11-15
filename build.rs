@@ -1,11 +1,9 @@
 #[macro_use]
 extern crate failure;
-extern crate tower_grpc_build;
+extern crate tonic_build;
 extern crate walkdir;
 
-use std::env;
-use std::fs::File;
-use std::io::{Error as IoError, Read, Write};
+use std::io::Error as IoError;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 
@@ -57,37 +55,12 @@ where
     Ok(entries)
 }
 
-fn with_file_contents<F, P>(src: P, dest: &Path, f: F) -> Result<(), BuildError>
-where
-    F: FnOnce(String) -> String,
-    P: AsRef<Path>,
-{
-    let mut contents = String::new();
-    File::open(src)?.read_to_string(&mut contents)?;
-    contents = f(contents);
-    File::create(&dest)?.write_all(contents.as_bytes())?;
-    Ok(())
-}
-
 fn run() -> Result<(), BuildError> {
     let protos: Vec<PathBuf> = find("./proto", "proto")?.into_iter().map(|e| e.into_path()).collect();
 
-    tower_grpc_build::Config::new()
-        .enable_client(true)
-        .build(&protos.as_slice(), &["./proto".into()])?;
-
-    // TODO: it seems like prost has substitutions for well-known types built
-    // in, but tower-grpc-build doesn't use it:
-    // https://github.com/danburkert/prost/blob/2f5d570ce4989b87980f989829577a564da37cb2/prost-build/src/extern_paths.rs
-    // Figure out why, so we can remove this hack.
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR environment variable not set"));
-    for rs in find(out_dir, "rs")? {
-        let path = rs.into_path();
-
-        with_file_contents(&path, &path, |contents| {
-            contents.replace("super::super::google::protobuf::BytesValue", "::std::vec::Vec<u8>")
-        })?;
-    }
+    tonic_build::configure()
+        .build_server(false)
+        .compile(&protos.as_slice(), &["./proto".into()])?;
 
     Ok(())
 }
