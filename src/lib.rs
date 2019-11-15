@@ -1,63 +1,64 @@
 extern crate bytes;
 extern crate prost;
 extern crate prost_types;
+extern crate tonic;
 
 pub mod admin {
-    include!(concat!(env!("OUT_DIR"), "/admin.rs"));
+    tonic::include_proto!("admin");
 }
 
 pub mod auth {
-    include!(concat!(env!("OUT_DIR"), "/auth.rs"));
+    tonic::include_proto!("auth");
 }
 
 mod auth_1_7 {
-    include!(concat!(env!("OUT_DIR"), "/auth_1_7.rs"));
+    tonic::include_proto!("auth_1_7");
 }
 
 mod auth_1_8 {
-    include!(concat!(env!("OUT_DIR"), "/auth_1_8.rs"));
+    tonic::include_proto!("auth_1_8");
 }
 
 pub mod debug {
-    include!(concat!(env!("OUT_DIR"), "/debug.rs"));
+    tonic::include_proto!("debug");
 }
 
 pub mod enterprise {
-    include!(concat!(env!("OUT_DIR"), "/enterprise.rs"));
+    tonic::include_proto!("enterprise");
 }
 
 pub mod health {
-    include!(concat!(env!("OUT_DIR"), "/health.rs"));
+    tonic::include_proto!("health");
 }
 
 pub mod pfs {
-    include!(concat!(env!("OUT_DIR"), "/pfs.rs"));
+    tonic::include_proto!("pfs");
 }
 
 mod pfs_1_7 {
-    include!(concat!(env!("OUT_DIR"), "/pfs_1_7.rs"));
+    tonic::include_proto!("pfs_1_7");
 }
 
 mod pfs_1_8 {
-    include!(concat!(env!("OUT_DIR"), "/pfs_1_8.rs"));
+    tonic::include_proto!("pfs_1_8");
 }
 
 pub mod pps {
-    include!(concat!(env!("OUT_DIR"), "/pps.rs"));
+    tonic::include_proto!("pps");
 }
 
 mod pps_1_7 {
-    include!(concat!(env!("OUT_DIR"), "/pps_1_7.rs"));
+    tonic::include_proto!("pps_1_7");
 }
 
 mod pps_1_8 {
-    include!(concat!(env!("OUT_DIR"), "/pps_1_8.rs"));
+    tonic::include_proto!("pps_1_8");
 }
 
 pub mod transaction {
-    include!(concat!(env!("OUT_DIR"), "/transaction.rs"));
+    tonic::include_proto!("transaction");
 }
 
 pub mod version {
-    include!(concat!(env!("OUT_DIR"), "/versionpb.rs"));
+    tonic::include_proto!("versionpb");
 }
