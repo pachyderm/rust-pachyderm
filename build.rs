@@ -56,7 +56,10 @@ where
 }
 
 fn run() -> Result<(), BuildError> {
-    let protos: Vec<PathBuf> = find("./proto", "proto")?.into_iter().map(|e| e.into_path()).collect();
+    let protos: Vec<PathBuf> = find("./proto", "proto")?
+        .into_iter()
+        .map(|e| e.into_path())
+        .collect();
 
     tonic_build::configure()
         .build_server(false)
@@ -70,4 +73,8 @@ fn main() {
         eprintln!("{}", err);
         exit(1);
     }
+
+    // Tells cargo to only rebuild if the proto directory (or, implicitly,
+    // this file) changed
+    println!("cargo:rerun-if-changed=./proto");
 }
