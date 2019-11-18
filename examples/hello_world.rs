@@ -14,10 +14,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let request = tonic::Request::new(CreateRepoRequest {
         repo: Some(Repo {
-            name: "hello-world".into()
+            name: "hello-world".into(),
         }),
         description: "".into(),
-        update: false
+        update: false,
     });
 
     let response = client.create_repo(request).await?;

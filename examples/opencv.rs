@@ -3,36 +3,44 @@
 //! See also the equivalent example in the python library:
 //! https://github.com/pachyderm/python-pachyderm/blob/master/examples/opencv/opencv.py
 
+extern crate futures_util;
 extern crate pachyderm;
 extern crate tokio;
 extern crate tonic;
-extern crate futures_util;
 
 use std::error::Error;
 
-use pachyderm::pfs::{client::ApiClient as PfsClient, CreateRepoRequest, Repo, File, Commit, PutFileRequest, StartCommitRequest, FinishCommitRequest};
-use pachyderm::pps::{client::ApiClient as PpsClient, CreatePipelineRequest, Pipeline, Transform, Input, PfsInput};
+use pachyderm::pfs::{
+    client::ApiClient as PfsClient, Commit, CreateRepoRequest, File, FinishCommitRequest, PutFileRequest, Repo,
+    StartCommitRequest,
+};
+use pachyderm::pps::{client::ApiClient as PpsClient, CreatePipelineRequest, Input, PfsInput, Pipeline, Transform};
 
-use tonic::Request;
-use tonic::transport::Channel;
 use futures_util::stream;
+use tonic::transport::Channel;
+use tonic::Request;
 
 fn create_pfs_input(glob: &str, repo: &str) -> Input {
     let mut pfs_input = PfsInput::default();
     pfs_input.glob = glob.into();
     pfs_input.repo = repo.into();
-    
+
     let mut input = Input::default();
     input.pfs = Some(pfs_input);
 
     input
 }
 
-async fn create_pipeline(pps_client: &mut PpsClient<Channel>, name: &str, transform_image: &str, transform_cmd: Vec<&str>, transform_stdin: Option<&str>, input: Input) -> Result<(), Box<dyn Error>> {
+async fn create_pipeline(
+    pps_client: &mut PpsClient<Channel>,
+    name: &str,
+    transform_image: &str,
+    transform_cmd: Vec<&str>,
+    transform_stdin: Option<&str>,
+    input: Input,
+) -> Result<(), Box<dyn Error>> {
     let mut request = CreatePipelineRequest::default();
-    request.pipeline = Some(Pipeline {
-        name: name.into(),
-    });
+    request.pipeline = Some(Pipeline { name: name.into() });
 
     let mut transform = Transform::default();
     transform.image = transform_image.into();
@@ -47,7 +55,12 @@ async fn create_pipeline(pps_client: &mut PpsClient<Channel>, name: &str, transf
     Ok(())
 }
 
-async fn put_file_url(pfs_client: &mut PfsClient<Channel>, commit: Commit, path: &str, url: &str) -> Result<(), Box<dyn Error>> {
+async fn put_file_url(
+    pfs_client: &mut PfsClient<Channel>,
+    commit: Commit,
+    path: &str,
+    url: &str,
+) -> Result<(), Box<dyn Error>> {
     let mut request = PutFileRequest::default();
 
     request.file = Some(File {
@@ -70,16 +83,21 @@ async fn create_images_repo(pfs_client: &mut PfsClient<Channel>) -> Result<(), B
 
 async fn create_edges_pipeline(pps_client: &mut PpsClient<Channel>) -> Result<(), Box<dyn Error>> {
     let input = create_pfs_input("/*", "images");
-    create_pipeline(pps_client, "edges", "pachyderm/opencv", vec!["python3", "edges.py"], None, input).await?;
+    create_pipeline(
+        pps_client,
+        "edges",
+        "pachyderm/opencv",
+        vec!["python3", "edges.py"],
+        None,
+        input,
+    )
+    .await?;
     Ok(())
 }
 
 async fn create_montage_pipeline(pps_client: &mut PpsClient<Channel>) -> Result<(), Box<dyn Error>> {
     let mut input = Input::default();
-    input.cross = vec![
-        create_pfs_input("/", "images"),
-        create_pfs_input("/", "edges"),
-    ];
+    input.cross = vec![create_pfs_input("/", "images"), create_pfs_input("/", "edges")];
 
     create_pipeline(
         pps_client,
@@ -95,11 +113,17 @@ async fn create_montage_pipeline(pps_client: &mut PpsClient<Channel>) -> Result<
 
 async fn put_example_images(pfs_client: &mut PfsClient<Channel>) -> Result<(), Box<dyn Error>> {
     // put a file from URL
-    put_file_url(pfs_client, Commit {
-        repo: Some(Repo { name: "images".into() }),
-        id: "master".into(),
-    }, "46Q8nDz.jpg", "http://imgur.com/46Q8nDz.jpg").await?;
-    
+    put_file_url(
+        pfs_client,
+        Commit {
+            repo: Some(Repo { name: "images".into() }),
+            id: "master".into(),
+        },
+        "46Q8nDz.jpg",
+        "http://imgur.com/46Q8nDz.jpg",
+    )
+    .await?;
+
     // put multiple files from URLs in a single a commit
     let mut parent = Commit::default();
     parent.repo = Some(Repo { name: "images".into() });
@@ -109,8 +133,20 @@ async fn put_example_images(pfs_client: &mut PfsClient<Channel>) -> Result<(), B
     commit.branch = "master".into();
     let commit = pfs_client.start_commit(Request::new(commit)).await?.into_inner();
 
-    put_file_url(pfs_client, commit.clone(), "g2QnNqa.jpg", "http://imgur.com/g2QnNqa.jpg").await?;
-    put_file_url(pfs_client, commit.clone(), "8MN9Kg0.jpg", "http://imgur.com/8MN9Kg0.jpg").await?;
+    put_file_url(
+        pfs_client,
+        commit.clone(),
+        "g2QnNqa.jpg",
+        "http://imgur.com/g2QnNqa.jpg",
+    )
+    .await?;
+    put_file_url(
+        pfs_client,
+        commit.clone(),
+        "8MN9Kg0.jpg",
+        "http://imgur.com/8MN9Kg0.jpg",
+    )
+    .await?;
 
     let mut request = FinishCommitRequest::default();
     request.commit = Some(commit);

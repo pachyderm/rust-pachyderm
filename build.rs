@@ -56,10 +56,7 @@ where
 }
 
 fn run() -> Result<(), BuildError> {
-    let protos: Vec<PathBuf> = find("./proto", "proto")?
-        .into_iter()
-        .map(|e| e.into_path())
-        .collect();
+    let protos: Vec<PathBuf> = find("./proto", "proto")?.into_iter().map(|e| e.into_path()).collect();
 
     tonic_build::configure()
         .build_server(false)
