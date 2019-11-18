@@ -1,5 +1,7 @@
 # Rust Pachyderm
 
+![Crates.io](https://img.shields.io/crates/v/pachyderm)
+[![Docs](https://docs.rs/pachyderm/badge.svg)](https://docs.rs/pachyderm)
 [![Slack Status](http://slack.pachyderm.io/badge.svg)](http://slack.pachyderm.io)
 
 Official Rust Pachyderm client. This library provides low-level (auto-generated) bindings to our gRPC services, with support for async/await thanks to [tonic](https://github.com/hyperium/tonic). It should work on rust stable 1.39+, as well as nightly/beta.
