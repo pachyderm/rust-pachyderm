@@ -8,7 +8,7 @@ description = "Pachyderm gRPC client, for working with PFS/PPS"
 homepage = "https://pachyderm.io"
 license = "Apache-2.0"
 repository = "https://github.com/pachyderm/rust-pachyderm"
-keywords = ["pachyderm", "kubernetes", "big data", "analytics", "data science"]
+keywords = ["pachyderm", "kubernetes", "big-data", "analytics", "data-science"]
 categories = ["api-bindings", "science"]
 
 [dependencies]
