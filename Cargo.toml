@@ -1,10 +1,10 @@
 [package]
 name = "pachyderm"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Yusuf Simonson <simonson@gmail.com>"]
 edition = "2018"
 build = "build.rs"
-description = "Pachyderm gRPC client, for working with PFS/PPS"
+description = "The official Pachyderm Rust library"
 homepage = "https://pachyderm.io"
 license = "Apache-2.0"
 repository = "https://github.com/pachyderm/rust-pachyderm"
