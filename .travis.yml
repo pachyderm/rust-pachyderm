@@ -39,7 +39,7 @@ matrix:
 env:
   global:
     - RUST_BACKTRACE=1
-    - PATH=$HOME/.local/bin:$HOME/cached-deps/bin:$PATH
+    - PATH=$HOME/cached-deps:$PATH
     - PACHYDERM_VERSION=1.9.8
 
 before_install:
