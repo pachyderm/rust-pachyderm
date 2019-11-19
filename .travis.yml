@@ -1,23 +1,61 @@
 dist: xenial
+language: rust
+services: docker
 sudo: required
-services:
-- docker
-cache:
-  directories:
-    - $HOME/.cache/go-build
-    - $HOME/cached-deps
-language: python
-python:
-  #  - 2.7 #TODO - Right now the tests require 'builtin' import, so we'll need to import this from the future module
-  - 3.7
+
+matrix:
+  include:
+    # Rust stable
+    - rust: stable
+      env:
+      - TARGET=x86_64-unknown-linux-gnu
+      - PKG_CONFIG_PATH=/usr/lib/pkgconfig:$PKG_CONFIG_PATH
+
+    # Rust beta
+    - rust: beta
+      env:
+      - TARGET=x86_64-unknown-linux-gnu
+      - PKG_CONFIG_PATH=/usr/lib/pkgconfig:$PKG_CONFIG_PATH
+
+    # Rust nightly
+    - rust: nightly
+      env:
+      - TARGET=x86_64-unknown-linux-gnu
+      - PKG_CONFIG_PATH=/usr/lib/pkgconfig:$PKG_CONFIG_PATH
+
+  allow_failures:
+    # Rust nightly
+    - rust: nightly
+      env:
+      - TARGET=x86_64-unknown-linux-gnu
+      - PKG_CONFIG_PATH=/usr/lib/pkgconfig:$PKG_CONFIG_PATH
+
 env:
   global:
+    - RUST_BACKTRACE=1
     - PATH=$HOME/cached-deps:$PATH
+    - PACHYDERM_VERSION=1.9.8
 
-install:
-- make ci-install
+before_install:
+  - ./etc/travis_before_install.sh
 before_script:
-- make ci-setup
+  - ./etc/travis_setup.sh
 script:
-- make proto
-- tox
+  - ./etc/travis_test.sh
+
+before_cache:
+  # Travis can't cache files that are not readable by "others"
+  - chmod -R a+r $HOME/.cargo
+  - chmod -R a+r $TRAVIS_BUILD_DIR/target
+  - chmod -R a+r $HOME/cached-deps
+cache:
+  directories:
+  - $HOME/.cargo
+  - $TRAVIS_BUILD_DIR/target
+  - $HOME/cached-deps
+  # Increase default timeout of 3m
+  timeout: 500
+
+notifications:
+  email:
+on_success: never

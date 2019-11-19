@@ -9,6 +9,7 @@ extern crate tokio;
 extern crate tonic;
 
 use std::error::Error;
+use std::env;
 
 use pachyderm::pfs::{
     client::ApiClient as PfsClient, Commit, CreateRepoRequest, File, FinishCommitRequest, PutFileRequest, Repo,
@@ -157,8 +158,15 @@ async fn put_example_images(pfs_client: &mut PfsClient<Channel>) -> Result<(), B
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let mut pfs_client = PfsClient::connect("http://localhost:30650").await?;
-    let mut pps_client = PpsClient::connect("http://localhost:30650").await?;
+    let mut args = env::args().collect::<Vec<String>>();
+    let pachd_address = if args.len() > 1 {
+        args.pop().unwrap()
+    } else {
+        "grpc://localhost:30650".into()
+    };
+
+    let mut pfs_client = PfsClient::connect(pachd_address.clone()).await?;
+    let mut pps_client = PpsClient::connect(pachd_address.clone()).await?;
     create_images_repo(&mut pfs_client).await?;
     create_edges_pipeline(&mut pps_client).await?;
     create_montage_pipeline(&mut pps_client).await?;
