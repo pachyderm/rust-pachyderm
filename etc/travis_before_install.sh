@@ -19,3 +19,6 @@ if [ ! -f "$HOME/cached-deps/pachctl.deb" ]; then
     curl -o $HOME/cached-deps/pachctl.deb -L https://github.com/pachyderm/pachyderm/releases/download/v${PACHYDERM_VERSION}/pachctl_${PACHYDERM_VERSION}_amd64.deb
 fi
 sudo dpkg -i $HOME/cached-deps/pachctl.deb
+
+# required by tonic-build
+rustup component add rustfmt
