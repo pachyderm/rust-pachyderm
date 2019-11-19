@@ -42,8 +42,8 @@ env:
     - PATH=$HOME/.local/bin:$HOME/cached-deps/bin:$PATH
     - PACHYDERM_VERSION=1.9.8
 
-install:
-  - ./etc/travis_install.sh
+before_install:
+  - ./etc/travis_before_install.sh
 before_script:
   - ./etc/travis_setup.sh
 script:
