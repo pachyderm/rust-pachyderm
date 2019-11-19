@@ -10,12 +10,6 @@ matrix:
       env:
       - TARGET=x86_64-unknown-linux-gnu
       - PKG_CONFIG_PATH=/usr/lib/pkgconfig:$PKG_CONFIG_PATH
-      - RUSTFLAGS="-C link-dead-code"
-    - os: osx
-      rust: stable
-      env:
-      - TARGET=x86_64-apple-darwin
-      - PATH=$HOME/Library/Python/2.7/bin:$PATH
 
     # Rust beta
     - rust: beta
