@@ -159,10 +159,10 @@ async fn put_example_images(pfs_client: &mut PfsClient<Channel>) -> Result<(), B
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let mut args = env::args().collect::<Vec<String>>();
-    let pachd_address = if let Some(value) = args.pop() {
-        value
+    let pachd_address = if args.len() > 1 {
+        args.pop().unwrap()
     } else {
-        "http://localhost:30650".into()
+        "grpc://localhost:30650".into()
     };
 
     let mut pfs_client = PfsClient::connect(pachd_address.clone()).await?;
