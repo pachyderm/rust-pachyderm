@@ -7,7 +7,7 @@ extern crate tonic;
 use std::error::Error;
 use std::env;
 
-use pachyderm::pfs::{client::ApiClient as PfsClient, CreateRepoRequest, Repo};
+use pachyderm::pfs::{api_client::ApiClient as PfsClient, CreateRepoRequest, Repo};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
