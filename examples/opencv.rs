@@ -3,7 +3,7 @@
 //! See also the equivalent example in the python library:
 //! https://github.com/pachyderm/python-pachyderm/blob/master/examples/opencv/opencv.py
 
-extern crate futures_util;
+extern crate futures;
 extern crate pachyderm;
 extern crate tokio;
 extern crate tonic;
@@ -12,12 +12,12 @@ use std::error::Error;
 use std::env;
 
 use pachyderm::pfs::{
-    client::ApiClient as PfsClient, Commit, CreateRepoRequest, File, FinishCommitRequest, PutFileRequest, Repo,
+    api_client::ApiClient as PfsClient, Commit, CreateRepoRequest, File, FinishCommitRequest, PutFileRequest, Repo,
     StartCommitRequest,
 };
-use pachyderm::pps::{client::ApiClient as PpsClient, CreatePipelineRequest, Input, PfsInput, Pipeline, Transform};
+use pachyderm::pps::{api_client::ApiClient as PpsClient, CreatePipelineRequest, Input, PfsInput, Pipeline, Transform};
 
-use futures_util::stream;
+use futures::stream;
 use tonic::transport::Channel;
 use tonic::Request;
 
