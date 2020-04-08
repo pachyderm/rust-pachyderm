@@ -8,8 +8,8 @@ extern crate pachyderm;
 extern crate tokio;
 extern crate tonic;
 
-use std::error::Error;
 use std::env;
+use std::error::Error;
 
 use pachyderm::pfs::{
     api_client::ApiClient as PfsClient, Commit, CreateRepoRequest, File, FinishCommitRequest, PutFileRequest, Repo,
