@@ -19,6 +19,10 @@ mod auth_1_8 {
     tonic::include_proto!("auth_1_8");
 }
 
+mod auth_1_9 {
+    tonic::include_proto!("auth_1_9");
+}
+
 pub mod debug {
     tonic::include_proto!("debug");
 }
@@ -43,6 +47,10 @@ mod pfs_1_8 {
     tonic::include_proto!("pfs_1_8");
 }
 
+mod pfs_1_9 {
+    tonic::include_proto!("pfs_1_9");
+}
+
 pub mod pps {
     tonic::include_proto!("pps");
 }
@@ -53,6 +61,10 @@ mod pps_1_7 {
 
 mod pps_1_8 {
     tonic::include_proto!("pps_1_8");
+}
+
+mod pps_1_9 {
+    tonic::include_proto!("pps_1_9");
 }
 
 pub mod transaction {

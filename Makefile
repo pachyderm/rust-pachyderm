@@ -11,5 +11,5 @@ clean:
 proto:
 	mkdir proto
 	cd $(PACHYDERM_ROOT)/src && find ./client -maxdepth 5 -regex ".*\.proto" -exec cp --parents {} $(RUST_PACHYDERM_ROOT)/proto/ \;
-	find ./proto -name "*.proto" -exec sed -i '' 's/import.*gogo.proto.*\;//' {} +
-	find ./proto -name "*.proto" -exec sed -i '' 's/\[.*gogoproto.*\]//' {} +
+	./etc/fix_protos.sh
+	cargo build

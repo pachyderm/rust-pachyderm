@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-package pfs;
-option go_package = "github.com/pachyderm/pachyderm/src/client/pfs";
+package pfs_1_9;
+option go_package = "github.com/pachyderm/pachyderm/src/client/admin/v1_9/pfs";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
@@ -9,7 +9,7 @@ import "google/protobuf/wrappers.proto";
 
 
 
-import "client/auth/auth.proto";
+import "client/admin/v1_9/auth/auth.proto";
 
 ////  PFS Data structures (stored in etcd)
 
@@ -76,7 +76,7 @@ message RepoInfo {
 message RepoAuthInfo {
   // The callers access level to the relevant repo (e.g. may be OWNER even if
   // the user isn't an OWNER of the repo, if they're an admin for the cluster)
-  auth.Scope access_level = 1;
+  auth_1_9.Scope access_level = 1;
 }
 
 // These are the different places where a commit may be originated from
@@ -183,7 +183,7 @@ message ObjectInfo {
   BlockRef block_ref = 2;
 }
 
-message Compaction {
+message Merge {
   repeated string prefixes = 1;
 }
 
@@ -397,7 +397,6 @@ message PutFileRecord {
   int64 size_bytes = 1;
   string object_hash = 2;
   OverwriteIndex overwrite_index = 3;
-  BlockRef block_ref = 4;
 }
 
 message PutFileRecords {
@@ -484,17 +483,6 @@ message FsckResponse {
   string error = 2;
 }
 
-// Messages specific to the new storage layer.
-
-message PutTarRequest {
-  Commit commit = 1;
-  bytes data = 2;
-}
-
-message GetTarRequest {
-  File file = 1;
-}
-
 service API {
   // Repo rpcs
   // CreateRepo creates a new repo.
@@ -571,10 +559,6 @@ service API {
   rpc DeleteAll(google.protobuf.Empty) returns (google.protobuf.Empty) {}
   // Fsck does a file system consistency check for pfs
   rpc Fsck(FsckRequest) returns (stream FsckResponse) {}
-
-  // RPCs specific to the new storage layer. 
-  rpc PutTar(stream PutTarRequest) returns (google.protobuf.Empty) {}
-  rpc GetTar(GetTarRequest) returns (stream google.protobuf.BytesValue) {}
 }
 
 message PutObjectRequest {
@@ -662,15 +646,6 @@ message Objects {
   repeated Object objects = 1;
 }
 
-message PutObjDirectRequest {
-    string obj = 1;
-    bytes value = 2;
-}
-
-message GetObjDirectRequest {
-    string obj = 1;
-}
-
 service ObjectAPI {
   rpc PutObject(stream PutObjectRequest) returns (Object) {}
   rpc PutObjectSplit(stream PutObjectRequest) returns (Objects) {}
@@ -694,16 +669,9 @@ service ObjectAPI {
   rpc ListTags(ListTagsRequest) returns (stream ListTagsResponse) {}
   rpc DeleteTags(DeleteTagsRequest) returns (DeleteTagsResponse) {}
   rpc Compact(google.protobuf.Empty) returns (google.protobuf.Empty) {}
-  // PutObjDirect puts an obj directly into object store, bypassing the content
-  // addressing layer.
-  rpc PutObjDirect(stream PutObjDirectRequest) returns (google.protobuf.Empty) {}
-  // GetObjDirect gets an obj directly out of object store, bypassing the
-  // content addressing layer.
-  rpc GetObjDirect(GetObjDirectRequest) returns (stream google.protobuf.BytesValue) {}
 }
 
 message ObjectIndex {
   map<string, BlockRef> objects = 1;
   map<string, Object> tags = 2;
 }
-
