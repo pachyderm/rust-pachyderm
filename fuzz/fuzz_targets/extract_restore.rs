@@ -4,7 +4,6 @@
 extern crate lazy_static;
 
 use std::env;
-use std::error::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use pachyderm::pfs;
@@ -18,7 +17,6 @@ use arbitrary::Arbitrary;
 use tokio::runtime::Runtime;
 use futures::stream;
 use futures::stream::TryStreamExt;
-use tonic::transport::Channel;
 
 lazy_static! {
     static ref COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -30,9 +28,9 @@ pub enum Op {
     ExtractRestore { no_objects: bool, no_repos: bool, no_pipelines: bool, delete_all: bool },
 }
 
-async fn run(op: Op) -> Result<(), Box<dyn Error>> {
-    let pachd_address = env::var("PACHD_ADDRESS")?;
-    let mut pfs_client = PfsClient::connect(pachd_address.clone()).await?;
+async fn run(op: Op) {
+    let pachd_address = env::var("PACHD_ADDRESS").expect("No `PACHD_ADDRESS` set");
+    let mut pfs_client = PfsClient::connect(pachd_address.clone()).await.unwrap();
 
     let input_head_commit = pfs::Commit {
         repo: Some(pfs::Repo {
@@ -61,37 +59,37 @@ async fn run(op: Op) -> Result<(), Box<dyn Error>> {
             });
 
             let req_stream = stream::iter(vec![req]);
-            pfs_client.put_file(req_stream).await?;
+            pfs_client.put_file(req_stream).await.unwrap();
 
             if flush {
                 pfs_client.flush_commit(pfs::FlushCommitRequest {
                     commits: vec![input_head_commit],
                     to_repos: vec![],
-                }).await?;
+                }).await.unwrap();
             }
         },
         Op::ExtractRestore { no_objects, no_repos, no_pipelines, delete_all } => {
-            let mut pps_client = PpsClient::connect(pachd_address.clone()).await?;
-            let mut admin_client = AdminClient::connect(pachd_address.clone()).await?;
+            let mut pps_client = PpsClient::connect(pachd_address.clone()).await.unwrap();
+            let mut admin_client = AdminClient::connect(pachd_address.clone()).await.unwrap();
 
             let input_commit_before = pfs_client.inspect_commit(pfs::InspectCommitRequest {
                 commit: Some(input_head_commit.clone()),
                 block_state: 0
-            }).await?.into_inner();
+            }).await.unwrap().into_inner();
             let output_commit_before = pfs_client.inspect_commit(pfs::InspectCommitRequest {
                 commit: Some(output_head_commit.clone()),
                 block_state: 0
-            }).await?.into_inner();
+            }).await.unwrap().into_inner();
 
             let extracted: Vec<admin::Op> = admin_client.extract(admin::ExtractRequest {
                 url: "".to_string(),
                 no_objects,
                 no_repos,
                 no_pipelines,
-            }).await?.into_inner().try_collect::<Vec<admin::Op>>().await?;
+            }).await.unwrap().into_inner().try_collect::<Vec<admin::Op>>().await.unwrap();
 
             if delete_all {
-                pps_client.delete_all(()).await?;
+                pps_client.delete_all(()).await.unwrap();
             }
 
             let reqs: Vec<admin::RestoreRequest> = extracted.into_iter().map(|op| {
@@ -100,29 +98,27 @@ async fn run(op: Op) -> Result<(), Box<dyn Error>> {
                     url: "".to_string()
                 }
             }).collect();
-            admin_client.restore(stream::iter(reqs)).await?;
+            admin_client.restore(stream::iter(reqs)).await.unwrap();
 
             // ensure it passes fsck
-            pfs_client.fsck(pfs::FsckRequest { fix: false }).await?;
+            pfs_client.fsck(pfs::FsckRequest { fix: false }).await.unwrap();
 
-            // // TODO: ensure we have commits, file contents preserved
+            // // TODO: ensure we have jobs, file contents preserved
             let input_commit_after = pfs_client.inspect_commit(pfs::InspectCommitRequest {
                 commit: Some(input_head_commit.clone()),
                 block_state: 0
-            }).await?.into_inner();
+            }).await.unwrap().into_inner();
             let output_commit_after = pfs_client.inspect_commit(pfs::InspectCommitRequest {
                 commit: Some(output_head_commit.clone()),
                 block_state: 0
-            }).await?.into_inner();
+            }).await.unwrap().into_inner();
 
             assert_eq!(input_commit_before, input_commit_after);
             assert_eq!(output_commit_before, output_commit_after);
         }
     }
-
-    Ok(())
 }
 
 fuzz_target!(|op: Op| {
-    Runtime::new().unwrap().block_on(run(op)).unwrap();
+    Runtime::new().unwrap().block_on(run(op));
 });
