@@ -16,7 +16,8 @@ proto:
 	cargo build
 
 fuzz-extract-restore:
+	yes | pachctl delete all
 	pachctl create repo fuzz_extract_restore_input
 	pachctl create pipeline -f fuzz/etc/extract_restore_output.json
-	RUST_BACKTRACE=1 PACHD_ADDRESS=$(PACHD_ADDRESS) cargo fuzz run extract_restore
+	RUST_BACKTRACE=full PACHD_ADDRESS=$(PACHD_ADDRESS) cargo fuzz run extract_restore
 	yes | pachctl delete all
