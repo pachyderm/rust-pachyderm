@@ -1,4 +1,3 @@
-
 {
   "pipeline": {
     "name": "fuzz_extract_restore_output"
@@ -11,6 +10,6 @@
   },
   "transform": {
     "cmd": ["bash"],
-    "stdin": "cp /pfs/fuzz_extract_restore_input/* /pfs/out/"
+    "stdin": ["cp /pfs/fuzz_extract_restore_input/* /pfs/out/"]
   }
 }
