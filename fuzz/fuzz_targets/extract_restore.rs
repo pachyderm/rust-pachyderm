@@ -4,7 +4,6 @@
 extern crate lazy_static;
 
 use std::env;
-use std::error::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use pachyderm::pfs;
@@ -20,6 +19,7 @@ use tokio::runtime::Runtime;
 use futures::stream;
 use futures::stream::TryStreamExt;
 use tonic::transport::Channel;
+use tonic::{Code, Status};
 
 lazy_static! {
     static ref COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -42,7 +42,7 @@ async fn create_pipeline(
     transform_cmd: Vec<&str>,
     transform_stdin: Option<&str>,
     input: pps::Input,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Status> {
     let mut request = pps::CreatePipelineRequest::default();
     request.pipeline = Some(pps::Pipeline { name: name.into() });
 
@@ -58,17 +58,23 @@ async fn create_pipeline(
     Ok(())
 }
 
-async fn delete_all(pps_client: &mut PpsClient<Channel>, pfs_client: &mut PfsClient<Channel>) -> Result<(), Box<dyn Error>> {
+async fn delete_all(pps_client: &mut PpsClient<Channel>, pfs_client: &mut PfsClient<Channel>) -> Result<(), Status> {
     pps_client.delete_all(()).await?;
     pfs_client.delete_all(()).await?;
     Ok(())
 }
 
-async fn inspect_commit(pfs_client: &mut PfsClient<Channel>, commit: pfs::Commit) -> Result<pfs::CommitInfo, Box<dyn Error>> {
-    Ok(pfs_client.inspect_commit(pfs::InspectCommitRequest {
-        commit: Some(commit),
-        block_state: 0
-    }).await?.into_inner())
+async fn inspect_commit(pfs_client: &mut PfsClient<Channel>, commit: pfs::Commit) -> Result<pfs::CommitInfo, Code> {
+    // just extract out the error code (if any), so that errors can be
+    // compared with `assert_eq`
+    let result = pfs_client.inspect_commit(
+        pfs::InspectCommitRequest {
+            commit: Some(commit),
+            block_state: 0
+        })
+        .await
+        .map_err(|status| status.code())?;
+    Ok(result.into_inner())
 }
 
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
@@ -143,8 +149,8 @@ async fn run(ops: Vec<Op>) {
                 }
             },
             Op::ExtractRestore { no_objects, no_repos, no_pipelines, should_delete_all } => {
-                let input_commit_before = inspect_commit(&mut pfs_client, input_head_commit.clone()).await.unwrap();
-                let output_commit_before = inspect_commit(&mut pfs_client, output_head_commit.clone()).await.unwrap();
+                let input_commit_before = inspect_commit(&mut pfs_client, input_head_commit.clone()).await;
+                let output_commit_before = inspect_commit(&mut pfs_client, output_head_commit.clone()).await;
 
                 let extracted: Vec<admin::Op> = admin_client.extract(admin::ExtractRequest {
                     url: "".to_string(),
@@ -169,8 +175,8 @@ async fn run(ops: Vec<Op>) {
                 pfs_client.fsck(pfs::FsckRequest { fix: false }).await.unwrap();
 
                 // // TODO: ensure we have jobs, file contents preserved
-                let input_commit_after = inspect_commit(&mut pfs_client, input_head_commit.clone()).await.unwrap();
-                let output_commit_after = inspect_commit(&mut pfs_client, output_head_commit.clone()).await.unwrap();
+                let input_commit_after = inspect_commit(&mut pfs_client, input_head_commit.clone()).await;
+                let output_commit_after = inspect_commit(&mut pfs_client, output_head_commit.clone()).await;
                 assert_eq!(input_commit_before, input_commit_after);
                 assert_eq!(output_commit_before, output_commit_after);
             }
