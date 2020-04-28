@@ -78,12 +78,20 @@ async fn inspect_commit(pfs_client: &mut PfsClient<Channel>, commit: pfs::Commit
 }
 
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
-pub enum Op {
-    PutFile { flush: bool },
-    ExtractRestore { no_objects: bool, no_repos: bool, no_pipelines: bool, should_delete_all: bool },
+struct Options {
+    ops: Vec<Op>,
+    no_objects: bool,
+    no_repos: bool,
+    no_pipelines: bool,
+    delete_all: bool
 }
 
-async fn run(ops: Vec<Op>) {
+#[derive(Arbitrary, Clone, Debug, PartialEq)]
+enum Op {
+    PutFile { flush: bool }
+}
+
+async fn run(opts: Options) {
     let pachd_address = env::var("PACHD_ADDRESS").expect("No `PACHD_ADDRESS` set");
     let mut pfs_client = PfsClient::connect(pachd_address.clone()).await.unwrap();
     let mut pps_client = PpsClient::connect(pachd_address.clone()).await.unwrap();
@@ -123,7 +131,7 @@ async fn run(ops: Vec<Op>) {
 
     println!("pass");
 
-    for op in ops.into_iter() {
+    for op in opts.ops.into_iter() {
         println!("- {:?}", op);
 
         match op {
@@ -147,45 +155,47 @@ async fn run(ops: Vec<Op>) {
                         to_repos: vec![],
                     }).await.unwrap();
                 }
-            },
-            Op::ExtractRestore { no_objects, no_repos, no_pipelines, should_delete_all } => {
-                let input_commit_before = inspect_commit(&mut pfs_client, input_head_commit.clone()).await;
-                let output_commit_before = inspect_commit(&mut pfs_client, output_head_commit.clone()).await;
-
-                let extracted: Vec<admin::Op> = admin_client.extract(admin::ExtractRequest {
-                    url: "".to_string(),
-                    no_objects,
-                    no_repos,
-                    no_pipelines,
-                }).await.unwrap().into_inner().try_collect::<Vec<admin::Op>>().await.unwrap();
-
-                if should_delete_all {
-                    delete_all(&mut pps_client, &mut pfs_client).await.unwrap();
-                }
-
-                let reqs: Vec<admin::RestoreRequest> = extracted.into_iter().map(|op| {
-                    admin::RestoreRequest{
-                        op: Some(op),
-                        url: "".to_string()
-                    }
-                }).collect();
-                admin_client.restore(stream::iter(reqs)).await.unwrap();
-
-                // ensure it passes fsck
-                pfs_client.fsck(pfs::FsckRequest { fix: false }).await.unwrap();
-
-                // // TODO: ensure we have jobs, file contents preserved
-                let input_commit_after = inspect_commit(&mut pfs_client, input_head_commit.clone()).await;
-                let output_commit_after = inspect_commit(&mut pfs_client, output_head_commit.clone()).await;
-                assert_eq!(input_commit_before, input_commit_after);
-                assert_eq!(output_commit_before, output_commit_after);
             }
         }
     }
 
+    let input_commit_before = inspect_commit(&mut pfs_client, input_head_commit.clone()).await;
+    let output_commit_before = inspect_commit(&mut pfs_client, output_head_commit.clone()).await;
+
+    let extracted: Vec<admin::Op> = admin_client.extract(admin::ExtractRequest {
+        url: "".to_string(),
+        no_objects: opts.no_objects,
+        no_repos: opts.no_repos,
+        no_pipelines: opts.no_pipelines,
+    }).await.unwrap().into_inner().try_collect::<Vec<admin::Op>>().await.unwrap();
+
+    if opts.delete_all {
+        delete_all(&mut pps_client, &mut pfs_client).await.unwrap();
+    }
+
+    let reqs: Vec<admin::RestoreRequest> = extracted.into_iter().map(|op| {
+        admin::RestoreRequest{
+            op: Some(op),
+            url: "".to_string()
+        }
+    }).collect();
+    admin_client.restore(stream::iter(reqs)).await.unwrap();
+
+    // ensure it passes fsck
+    pfs_client.fsck(pfs::FsckRequest { fix: false }).await.unwrap();
+
+    // // TODO: ensure we have jobs, file contents preserved
+    let input_commit_after = inspect_commit(&mut pfs_client, input_head_commit.clone()).await;
+    let output_commit_after = inspect_commit(&mut pfs_client, output_head_commit.clone()).await;
+    assert_eq!(input_commit_before, input_commit_after);
+    assert_eq!(output_commit_before, output_commit_after);
+
     delete_all(&mut pps_client, &mut pfs_client).await.unwrap();
 }
 
-fuzz_target!(|ops: Vec<Op>| {
-    Runtime::new().unwrap().block_on(run(ops));
+fuzz_target!(|opts: Options| {
+    if opts.ops.is_empty() {
+        return;
+    }
+    Runtime::new().unwrap().block_on(run(opts));
 });
