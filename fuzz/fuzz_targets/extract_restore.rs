@@ -1,10 +1,6 @@
 #![no_main]
 
-#[macro_use]
-extern crate lazy_static;
-
 use std::env;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use pachyderm::pfs;
 use pachyderm::pfs::api_client::ApiClient as PfsClient;
@@ -20,10 +16,7 @@ use futures::stream;
 use futures::stream::TryStreamExt;
 use tonic::transport::Channel;
 use tonic::{Code, Status};
-
-lazy_static! {
-    static ref COUNTER: AtomicUsize = AtomicUsize::new(0);
-}
+use pretty_assertions::{assert_eq, assert_ne};
 
 fn create_pfs_input(glob: &str, repo: &str) -> pps::Input {
     let mut pfs_input = pps::PfsInput::default();
@@ -93,6 +86,7 @@ enum Op {
 
 async fn run(opts: Options) {
     let pachd_address = env::var("PACHD_ADDRESS").expect("No `PACHD_ADDRESS` set");
+    let mut counter = 0;
     let mut pfs_client = PfsClient::connect(pachd_address.clone()).await.unwrap();
     let mut pps_client = PpsClient::connect(pachd_address.clone()).await.unwrap();
     let mut admin_client = AdminClient::connect(pachd_address.clone()).await.unwrap();
@@ -136,12 +130,15 @@ async fn run(opts: Options) {
 
         match op {
             Op::PutFile { flush } => {
+                let file_contents = counter;
+                counter += 1;
+
                 let mut req = pfs::PutFileRequest::default();
                 req.file = Some(pfs::File {
                     path: "/test".to_string(),
                     commit: Some(input_head_commit.clone()),
                 });
-                req.value = format!("{}", (*COUNTER).fetch_add(1, Ordering::Relaxed)).into_bytes();
+                req.value = format!("{}", file_contents).into_bytes();
                 req.overwrite_index = Some(pfs::OverwriteIndex {
                     index: 0
                 });
@@ -169,7 +166,7 @@ async fn run(opts: Options) {
         no_pipelines: opts.no_pipelines,
     }).await.unwrap().into_inner().try_collect::<Vec<admin::Op>>().await.unwrap();
 
-    if opts.delete_all {
+    if opts.delete_all && !opts.no_repos && !opts.no_pipelines {
         delete_all(&mut pps_client, &mut pfs_client).await.unwrap();
     }
 
