@@ -67,7 +67,13 @@ async fn inspect_commit(pfs_client: &mut PfsClient<Channel>, commit: pfs::Commit
         })
         .await
         .map_err(|status| status.code())?;
-    Ok(result.into_inner())
+    let mut commit = result.into_inner();
+
+    // these fields will change at extract/restore time, so don't compare them
+    commit.started = None;
+    commit.finished = None;
+    
+    Ok(commit)
 }
 
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
