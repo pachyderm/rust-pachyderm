@@ -123,11 +123,7 @@ async fn run(opts: Options) {
         id: "master".to_string(),
     };
 
-    println!("pass");
-
     for op in opts.ops.into_iter() {
-        println!("- {:?}", op);
-
         match op {
             Op::PutFile { flush } => {
                 let file_contents = counter;
