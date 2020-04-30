@@ -16,5 +16,4 @@ proto:
 	cargo build
 
 fuzz-extract-restore:
-	cd $(PACHYDERM_ROOT) && ./etc/reset.py
 	RUST_BACKTRACE=1 PACHD_ADDRESS=$(PACHD_ADDRESS) cargo fuzz run extract_restore
