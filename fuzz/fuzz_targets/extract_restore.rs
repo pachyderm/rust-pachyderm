@@ -79,10 +79,7 @@ async fn inspect_commit(pfs_client: &mut PfsClient<Channel>, commit: pfs::Commit
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
 struct Options {
     ops: Vec<Op>,
-    no_objects: bool,
-    no_repos: bool,
-    no_pipelines: bool,
-    delete_all: bool
+    no_objects: bool
 }
 
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
@@ -164,13 +161,13 @@ async fn run(opts: Options) {
     let extracted: Vec<admin::Op> = admin_client.extract(admin::ExtractRequest {
         url: "".to_string(),
         no_objects: opts.no_objects,
-        no_repos: opts.no_repos,
-        no_pipelines: opts.no_pipelines,
+        no_repos: false,
+        no_pipelines: false,
     }).await.unwrap().into_inner().try_collect::<Vec<admin::Op>>().await.unwrap();
 
-    if opts.delete_all && !opts.no_repos && !opts.no_pipelines {
-        delete_all(&mut pps_client, &mut pfs_client).await.unwrap();
-    }
+    // restoring on top of a non-empty cluster is undefined behavior, so clear
+    // everything out before restoring
+    delete_all(&mut pps_client, &mut pfs_client).await.unwrap();
 
     let reqs: Vec<admin::RestoreRequest> = extracted.into_iter().map(|op| {
         admin::RestoreRequest{
