@@ -13,7 +13,7 @@ use libfuzzer_sys::fuzz_target;
 use arbitrary::Arbitrary;
 use tokio::runtime::Runtime;
 use futures::stream;
-use futures::stream::TryStreamExt;
+use futures::stream::{StreamExt, TryStreamExt};
 use tonic::transport::Channel;
 use tonic::{Code, Status};
 use pretty_assertions::assert_eq;
@@ -195,11 +195,23 @@ async fn run(opts: Options) {
             // ensure it passes fsck
             pfs_client.fsck(pfs::FsckRequest { fix: false }).await.unwrap();
 
-            // // TODO: ensure we have jobs, file contents preserved
+            // ensure commits remain the same
             let input_commit_after = inspect_commit(&mut pfs_client, input_head_commit.clone()).await;
             let output_commit_after = inspect_commit(&mut pfs_client, output_head_commit.clone()).await;
             assert_eq!(input_commit_before, input_commit_after);
             assert_eq!(output_commit_before, output_commit_after);
+
+            // ensure the file contents are restored
+            let file_bytes: Vec<Vec<u8>> = pfs_client.get_file(pfs::GetFileRequest {
+                file: Some(pfs::File {
+                    commit: Some(output_head_commit),
+                    path: "/test".to_string(),
+                }),
+                offset_bytes: 0,
+                size_bytes: 0,
+            }).await.unwrap().into_inner().try_collect::<Vec<Vec<u8>>>().await.unwrap();
+            let file_bytes = file_bytes.into_iter().flatten().collect::<Vec<u8>>();
+            assert_eq!(file_bytes, format!("{}", counter).into_bytes());
         }
     }
 
