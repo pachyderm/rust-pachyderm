@@ -13,7 +13,7 @@ use libfuzzer_sys::fuzz_target;
 use arbitrary::Arbitrary;
 use tokio::runtime::Runtime;
 use futures::stream;
-use futures::stream::{StreamExt, TryStreamExt};
+use futures::stream::TryStreamExt;
 use tonic::transport::Channel;
 use tonic::{Code, Status};
 use pretty_assertions::assert_eq;
