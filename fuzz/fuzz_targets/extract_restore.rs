@@ -16,7 +16,7 @@ use futures::stream;
 use futures::stream::TryStreamExt;
 use tonic::transport::Channel;
 use tonic::{Code, Status};
-use pretty_assertions::{assert_eq, assert_ne};
+use pretty_assertions::assert_eq;
 
 fn create_pfs_input(glob: &str, repo: &str) -> pps::Input {
     let mut pfs_input = pps::PfsInput::default();
@@ -76,15 +76,30 @@ async fn inspect_commit(pfs_client: &mut PfsClient<Channel>, commit: pfs::Commit
     Ok(commit)
 }
 
+async fn extract(admin_client: &mut AdminClient<Channel>, no_objects: bool, no_repos: bool, no_pipelines: bool) -> Result<Vec<admin::Op>, Status> {
+    admin_client.extract(admin::ExtractRequest {
+        url: "".to_string(),
+        no_objects: no_objects,
+        no_repos,
+        no_pipelines,
+    }).await.unwrap().into_inner().try_collect::<Vec<admin::Op>>().await
+}
+
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
 struct Options {
     ops: Vec<Op>,
-    no_objects: bool
+    outro: Outro
 }
 
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
 enum Op {
     PutFile { flush: bool }
+}
+
+#[derive(Arbitrary, Clone, Debug, PartialEq)]
+enum Outro {
+    Extract { no_objects: bool, no_repos: bool, no_pipelines: bool },
+    ExtractRestore { no_objects: bool },
 }
 
 async fn run(opts: Options) {
@@ -155,36 +170,38 @@ async fn run(opts: Options) {
         }
     }
 
-    let input_commit_before = inspect_commit(&mut pfs_client, input_head_commit.clone()).await;
-    let output_commit_before = inspect_commit(&mut pfs_client, output_head_commit.clone()).await;
+    match opts.outro {
+        Outro::Extract { no_objects, no_repos, no_pipelines } => {
+            extract(&mut admin_client, no_objects, no_repos, no_pipelines).await.unwrap();
+        },
+        Outro::ExtractRestore { no_objects } => {
+            let input_commit_before = inspect_commit(&mut pfs_client, input_head_commit.clone()).await;
+            let output_commit_before = inspect_commit(&mut pfs_client, output_head_commit.clone()).await;
 
-    let extracted: Vec<admin::Op> = admin_client.extract(admin::ExtractRequest {
-        url: "".to_string(),
-        no_objects: opts.no_objects,
-        no_repos: false,
-        no_pipelines: false,
-    }).await.unwrap().into_inner().try_collect::<Vec<admin::Op>>().await.unwrap();
+            let extracted = extract(&mut admin_client, no_objects, false, false).await.unwrap();
 
-    // restoring on top of a non-empty cluster is undefined behavior, so clear
-    // everything out before restoring
-    delete_all(&mut pps_client, &mut pfs_client).await.unwrap();
+            // restoring on top of a non-empty cluster is undefined behavior, so clear
+            // everything out before restoring
+            delete_all(&mut pps_client, &mut pfs_client).await.unwrap();
 
-    let reqs: Vec<admin::RestoreRequest> = extracted.into_iter().map(|op| {
-        admin::RestoreRequest{
-            op: Some(op),
-            url: "".to_string()
+            let reqs: Vec<admin::RestoreRequest> = extracted.into_iter().map(|op| {
+                admin::RestoreRequest{
+                    op: Some(op),
+                    url: "".to_string()
+                }
+            }).collect();
+            admin_client.restore(stream::iter(reqs)).await.unwrap();
+
+            // ensure it passes fsck
+            pfs_client.fsck(pfs::FsckRequest { fix: false }).await.unwrap();
+
+            // // TODO: ensure we have jobs, file contents preserved
+            let input_commit_after = inspect_commit(&mut pfs_client, input_head_commit.clone()).await;
+            let output_commit_after = inspect_commit(&mut pfs_client, output_head_commit.clone()).await;
+            assert_eq!(input_commit_before, input_commit_after);
+            assert_eq!(output_commit_before, output_commit_after);
         }
-    }).collect();
-    admin_client.restore(stream::iter(reqs)).await.unwrap();
-
-    // ensure it passes fsck
-    pfs_client.fsck(pfs::FsckRequest { fix: false }).await.unwrap();
-
-    // // TODO: ensure we have jobs, file contents preserved
-    let input_commit_after = inspect_commit(&mut pfs_client, input_head_commit.clone()).await;
-    let output_commit_after = inspect_commit(&mut pfs_client, output_head_commit.clone()).await;
-    assert_eq!(input_commit_before, input_commit_after);
-    assert_eq!(output_commit_before, output_commit_after);
+    }
 
     delete_all(&mut pps_client, &mut pfs_client).await.unwrap();
 }
