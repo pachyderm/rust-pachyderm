@@ -36,6 +36,16 @@ struct Options {
     ops: Vec<Op>,
 }
 
+impl Options {
+    fn valid(&self) -> bool {
+        if self.ops.len() == 0 {
+            false
+        } else {
+            self.ops.iter().all(|op| op.valid())
+        }
+    }
+}
+
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
 enum Op {
     CreateRepo { name: RepoName, update: bool },
@@ -44,9 +54,26 @@ enum Op {
     DeleteRepo { name: RepoName, force: bool, all: bool },
 }
 
+impl Op {
+    fn valid(&self) -> bool {
+        match self {
+            Op::CreateRepo { name, update: _ } => name.valid(),
+            Op::InspectRepo { name } => name.valid(),
+            Op::DeleteRepo { name, force: _, all: _ } => name.valid(),
+            _ => true
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct RepoName {
     bytes: Vec<u8>
+}
+
+impl RepoName {
+    fn valid(&self) -> bool {
+        self.bytes.len() > 0
+    }
 }
 
 impl ToString for RepoName {
@@ -110,7 +137,7 @@ async fn run(opts: Options) {
 }
 
 fuzz_target!(|opts: Options| {
-    if opts.ops.is_empty() {
+    if !opts.valid() {
         return;
     }
     Runtime::new().unwrap().block_on(run(opts));

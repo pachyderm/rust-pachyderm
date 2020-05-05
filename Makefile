@@ -16,7 +16,7 @@ proto:
 	cargo build
 
 fuzz-pfs:
-	RUST_BACKTRACE=1 PACHD_ADDRESS=$(PACHD_ADDRESS) cargo fuzz run pfs
+	RUST_BACKTRACE=1 PACHD_ADDRESS=$(PACHD_ADDRESS) cargo fuzz run pfs -- -detect_leaks=0
 
 fuzz-extract-restore:
 	RUST_BACKTRACE=1 PACHD_ADDRESS=$(PACHD_ADDRESS) cargo fuzz run extract_restore
