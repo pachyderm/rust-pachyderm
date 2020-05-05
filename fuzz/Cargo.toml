@@ -10,6 +10,7 @@ edition = "2018"
 cargo-fuzz = true
 
 [dependencies]
+base64 = "0.12.0"
 arbitrary = { version = "0.4.3", features = ["derive"] }
 futures = "0.3.4"
 libfuzzer-sys = "0.3.2"
@@ -27,3 +28,7 @@ members = ["."]
 [[bin]]
 name = "extract_restore"
 path = "fuzz_targets/extract_restore.rs"
+
+[[bin]]
+name = "pfs"
+path = "fuzz_targets/pfs.rs"

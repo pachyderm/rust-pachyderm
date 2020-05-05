@@ -15,5 +15,8 @@ proto:
 	./etc/fix_protos.sh
 	cargo build
 
+fuzz-pfs:
+	RUST_BACKTRACE=1 PACHD_ADDRESS=$(PACHD_ADDRESS) cargo fuzz run pfs
+
 fuzz-extract-restore:
 	RUST_BACKTRACE=1 PACHD_ADDRESS=$(PACHD_ADDRESS) cargo fuzz run extract_restore
