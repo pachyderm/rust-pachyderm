@@ -61,8 +61,35 @@ impl Options {
                     }
                     repo_count -= 1;
                 },
+
+                Op::CreateBranch { name: _, new } => {
+                    if repo_count == 0 {
+                        return false;
+                    }
+                    if !new && branch_count == 0 {
+                        return false;
+                    }
+                    branch_count += 1;
+                },
+                Op::InspectBranch => {
+                    if branch_count == 0 {
+                        return false;
+                    }
+                },
+                Op::ListBranch { reverse: _ } => {
+                    if repo_count == 0 {
+                        return false;
+                    }
+                }
+                Op::DeleteBranch { force: _ } => {
+                    if branch_count == 0 {
+                        return false;
+                    }
+                },
+
                 Op::DeleteAll => {
                     repo_count = 0;
+                    branch_count = 0;
                 }
                 _ => {}
             }
@@ -74,10 +101,15 @@ impl Options {
 
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
 enum Op {
-    CreateRepo { name: RepoName, update: bool },
+    CreateRepo { name: Name, update: bool },
     InspectRepo,
     ListRepo,
     DeleteRepo { force: bool, all: bool },
+
+    CreateBranch { name: Name, new: bool },
+    InspectBranch,
+    ListBranch { reverse: bool },
+    DeleteBranch { force: bool },
 
     DeleteAll,
 
@@ -94,17 +126,17 @@ impl Op {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct RepoName {
+struct Name {
     bytes: Vec<u8>
 }
 
-impl RepoName {
+impl Name {
     fn valid(&self) -> bool {
         self.bytes.len() > 0
     }
 }
 
-impl ToString for RepoName {
+impl ToString for Name {
     fn to_string(&self) -> String {
         // Quick and dirty way to make valid repo names from arbitrary bytes.
         // As a small performance win, we could alternatively create a proper
@@ -114,10 +146,10 @@ impl ToString for RepoName {
     }
 }
 
-impl Arbitrary for RepoName {
+impl Arbitrary for Name {
     fn arbitrary(u: &mut Unstructured<'_>) -> arbitrary::Result<Self> {
         let bytes = Vec::<u8>::arbitrary(u)?;
-        Ok(RepoName { bytes })
+        Ok(Name { bytes })
     }
 
     fn size_hint(_: usize) -> (usize, Option<usize>) {
@@ -129,7 +161,9 @@ async fn run(opts: Options) {
     let pachd_address = env::var("PACHD_ADDRESS").expect("No `PACHD_ADDRESS` set");
     let mut pfs_client = PfsClient::connect(pachd_address.clone()).await.unwrap();
     let mut pps_client = PpsClient::connect(pachd_address.clone()).await.unwrap();
+
     let mut repos = Vec::new();
+    let mut branches = Vec::<(String, String)>::new();
 
     delete_all(&mut pps_client, &mut pfs_client).await.unwrap();
 
@@ -163,6 +197,58 @@ async fn run(opts: Options) {
                     all
                 }).await);
             },
+
+            Op::CreateBranch { name, new } => {
+                let last_repo = repos.last().unwrap().clone();
+
+                check(pfs_client.create_branch(pfs::CreateBranchRequest {
+                    head: if new {
+                        None
+                    } else {
+                        let (last_repo, last_branch) = branches.last().unwrap().clone();
+                        Some(pfs::Commit {
+                            repo: Some(pfs::Repo { name: last_repo }),
+                            id: last_branch,
+                        })
+                    },
+                    branch: Some(pfs::Branch {
+                        repo: Some(pfs::Repo { name: last_repo.clone() }),
+                        name: name.to_string(),
+                    }),
+                    s_branch: "".to_string(),
+                    provenance: Vec::default(),
+                }).await);
+
+                branches.push((last_repo, name.to_string()));
+            },
+            Op::InspectBranch => {
+                let (last_repo, last_branch) = branches.last().unwrap().clone();
+
+                check(pfs_client.inspect_branch(pfs::InspectBranchRequest {
+                    branch: Some(pfs::Branch {
+                        repo: Some(pfs::Repo { name: last_repo }),
+                        name: last_branch,
+                    })
+                }).await);
+            },
+            Op::ListBranch { reverse } => {
+                check(pfs_client.list_branch(pfs::ListBranchRequest {
+                    repo: Some(pfs::Repo { name: repos.last().unwrap().clone() }),
+                    reverse: reverse
+                }).await);
+            },
+            Op::DeleteBranch { force } => {
+                let (last_repo, last_branch) = branches.pop().unwrap();
+
+                check(pfs_client.delete_branch(pfs::DeleteBranchRequest {
+                    branch: Some(pfs::Branch {
+                        repo: Some(pfs::Repo { name: last_repo }),
+                        name: last_branch,
+                    }),
+                    force
+                }).await);
+            },
+
             Op::DeleteAll => {
                 pfs_client.delete_all(()).await.unwrap();
                 repos = Vec::new();
