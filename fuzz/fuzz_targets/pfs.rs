@@ -38,28 +38,48 @@ struct Options {
 
 impl Options {
     fn valid(&self) -> bool {
-        if self.ops.len() == 0 {
-            false
-        } else {
-            self.ops.iter().all(|op| op.valid())
+        if self.ops.is_empty() || !self.ops.iter().all(|op| op.valid()) {
+            return false;
         }
+
+        let mut repo_count = 0;
+
+        for op in &self.ops {
+            match op {
+                Op::CreateRepo { name: _, update: _ } => {
+                    repo_count += 1;
+                },
+                Op::InspectRepo => {
+                    if repo_count == 0 {
+                        return false;
+                    }
+                },
+                Op::DeleteRepo { force: _, all: _ } => {
+                    if repo_count == 0 {
+                        return false;
+                    }
+                    repo_count -= 1;
+                },
+                _ => {}
+            }
+        }
+
+        true
     }
 }
 
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
 enum Op {
     CreateRepo { name: RepoName, update: bool },
-    InspectRepo { name: RepoName },
+    InspectRepo,
     ListRepo,
-    DeleteRepo { name: RepoName, force: bool, all: bool },
+    DeleteRepo { force: bool, all: bool },
 }
 
 impl Op {
     fn valid(&self) -> bool {
         match self {
             Op::CreateRepo { name, update: _ } => name.valid(),
-            Op::InspectRepo { name } => name.valid(),
-            Op::DeleteRepo { name, force: _, all: _ } => name.valid(),
             _ => true
         }
     }
@@ -101,31 +121,36 @@ async fn run(opts: Options) {
     let pachd_address = env::var("PACHD_ADDRESS").expect("No `PACHD_ADDRESS` set");
     let mut pfs_client = PfsClient::connect(pachd_address.clone()).await.unwrap();
     let mut pps_client = PpsClient::connect(pachd_address.clone()).await.unwrap();
+    let mut repos = Vec::new();
 
     delete_all(&mut pps_client, &mut pfs_client).await.unwrap();
 
     for op in opts.ops.into_iter() {
         match op {
             Op::CreateRepo { name, update } => {
+                let name = name.to_string();
+                
                 check(pfs_client.create_repo(pfs::CreateRepoRequest {
-                    repo: Some(pfs::Repo { name: name.to_string() }),
+                    repo: Some(pfs::Repo { name: name.clone() }),
                     description: "".into(),
                     update: update,
                 }).await);
+
+                repos.push(name);
             },
 
-            Op::InspectRepo { name } => {
+            Op::InspectRepo => {
                 check(pfs_client.inspect_repo(pfs::InspectRepoRequest {
-                    repo: Some(pfs::Repo { name: name.to_string() }),
+                    repo: Some(pfs::Repo { name: repos.last().unwrap().clone() }),
                 }).await);
             },
             Op::ListRepo => {
                 check(pfs_client.list_repo(pfs::ListRepoRequest {}).await);
             },
 
-            Op::DeleteRepo { name, force, all } => {
+            Op::DeleteRepo { force, all } => {
                 check(pfs_client.delete_repo(pfs::DeleteRepoRequest {
-                    repo: Some(pfs::Repo { name: name.to_string() }),
+                    repo: Some(pfs::Repo { name: repos.pop().unwrap() }),
                     force,
                     all
                 }).await);
