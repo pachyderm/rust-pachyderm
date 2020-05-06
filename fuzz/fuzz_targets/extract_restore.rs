@@ -202,6 +202,11 @@ async fn run(opts: Options) {
             // restoring on top of a non-empty cluster is undefined behavior, so clear
             // everything out before restoring
             delete_all(&mut pps_client, &mut pfs_client).await.unwrap();
+            if !no_objects {
+                pps_client.garbage_collect(pps::GarbageCollectRequest {
+                    memory_bytes: 64*1024*1024,
+                }).await.unwrap();
+            }
 
             let reqs: Vec<admin::RestoreRequest> = extracted.into_iter().map(|op| {
                 admin::RestoreRequest{
