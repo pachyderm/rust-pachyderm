@@ -43,6 +43,7 @@ impl Options {
         }
 
         let mut repo_count = 0;
+        let mut branch_count = 0;
 
         for op in &self.ops {
             match op {
@@ -60,6 +61,9 @@ impl Options {
                     }
                     repo_count -= 1;
                 },
+                Op::DeleteAll => {
+                    repo_count = 0;
+                }
                 _ => {}
             }
         }
@@ -74,6 +78,10 @@ enum Op {
     InspectRepo,
     ListRepo,
     DeleteRepo { force: bool, all: bool },
+
+    DeleteAll,
+
+    // TODO: commit, file-related RPCs
 }
 
 impl Op {
@@ -154,9 +162,16 @@ async fn run(opts: Options) {
                     force,
                     all
                 }).await);
+            },
+            Op::DeleteAll => {
+                pfs_client.delete_all(()).await.unwrap();
+                repos = Vec::new();
             }
         }
     }
+
+    // ensure it passes fsck
+    pfs_client.fsck(pfs::FsckRequest { fix: false }).await.unwrap();
 
     delete_all(&mut pps_client, &mut pfs_client).await.unwrap();
 }
