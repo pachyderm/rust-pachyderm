@@ -302,8 +302,6 @@ async fn run(opts: Options) {
             } else {
                 assert_eq!(file_bytes, format!("{}", counter - 1).into_bytes());
             }
-
-            // TODO: check that jobs status is what we expect
         }
     }
 
