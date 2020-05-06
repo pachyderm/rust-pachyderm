@@ -11,6 +11,7 @@ use arbitrary::{Arbitrary, Unstructured};
 use tokio::runtime::Runtime;
 use tonic::transport::Channel;
 use tonic::{Code, Status};
+use futures::stream;
 
 async fn delete_all(pps_client: &mut PpsClient<Channel>, pfs_client: &mut PfsClient<Channel>) -> Result<(), Status> {
     pps_client.delete_all(()).await?;
@@ -23,6 +24,11 @@ fn check<T>(result: Result<T, Status>) {
         match err.code() {
             Code::Cancelled | Code::DeadlineExceeded | Code::NotFound | Code::AlreadyExists | Code::PermissionDenied | Code::ResourceExhausted | Code::FailedPrecondition | Code::Aborted | Code::OutOfRange | Code::Unimplemented | Code::Internal | Code::Unavailable | Code::DataLoss | Code::Unauthenticated => {
                 panic!("unexpected error: {:?}\n{}", err.code(), err);
+            },
+            Code::Unknown => {
+                if !err.message().contains("as it already exists") {
+                    panic!("unexpected error: {}", err);
+                }
             }
             _ => {
                 println!("{}", err);
@@ -45,6 +51,7 @@ impl Options {
         let mut repo_count = 0;
         let mut branch_count = 0;
         let mut open_commit_count = 0;
+        let mut file_count = 0;
 
         for op in &self.ops {
             match op {
@@ -64,6 +71,9 @@ impl Options {
                         return false;
                     }
                     repo_count -= 1;
+                    branch_count = 0;
+                    open_commit_count = 0;
+                    file_count = 0;
                 },
 
                 Op::StartCommit => {
@@ -101,6 +111,7 @@ impl Options {
                         }
                         branch_count -= 1;
                     }
+                    file_count = 0;
                 },
                 Op::FlushCommit => {
                     if branch_count == 0 {
@@ -128,12 +139,63 @@ impl Options {
                     if branch_count == 0 {
                         return false;
                     }
+                    file_count = 0;
+                },
+
+                Op::PutFile { open, path: _, bytes: _, delimiter: _, target_file_datums: _, target_file_bytes: _, header_records: _, overwrite_index: _ } => {
+                    if *open {
+                        if open_commit_count == 0 {
+                            return false;
+                        }
+                    } else {
+                        if branch_count == 0 {
+                            return false;
+                        }
+                    }
+                    file_count += 1;
+                },
+                Op::GetFile { offset_bytes: _, size_bytes: _ } => {
+                    if file_count == 0 {
+                        return false;
+                    }
+                },
+                Op::InspectFile => {
+                    if file_count == 0 {
+                        return false;
+                    }
+                },
+                Op::ListFile { full: _, history: _ } => {
+                    if branch_count == 0 {
+                        return false;
+                    }
+                },
+                Op::WalkFile => {
+                    if branch_count == 0 {
+                        return false;
+                    }
+                },
+                Op::GlobFile { pattern: _ } => {
+                    if branch_count == 0 {
+                        return false;
+                    }
+                },
+                Op::DiffFile { shallow: _ } => {
+                    if file_count < 2 {
+                        return false;
+                    }
+                },
+                Op::DeleteFile => {
+                    if file_count == 0 {
+                        return false;
+                    }
+                    file_count -= 1;
                 },
 
                 Op::DeleteAll => {
                     repo_count = 0;
                     branch_count = 0;
                     open_commit_count = 0;
+                    file_count = 0;
                 }
                 _ => {}
             }
@@ -143,6 +205,7 @@ impl Options {
     }
 }
 
+// TODO: copy file
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
 enum Op {
     CreateRepo { name: Name, update: bool },
@@ -156,6 +219,24 @@ enum Op {
     ListCommit { number: u64, reverse: bool },
     DeleteCommit { open: bool },
     FlushCommit,
+
+    PutFile {
+        open: bool,
+        path: String,
+        bytes: Vec<u8>,
+        delimiter: Delimiter,
+        target_file_datums: i64,
+        target_file_bytes: i64,
+        header_records: i64,
+        overwrite_index: Option<i64>
+    },
+    GetFile { offset_bytes: i64, size_bytes: i64 },
+    InspectFile,
+    ListFile { full: bool, history: i64 },
+    WalkFile,
+    GlobFile { pattern: String },
+    DiffFile { shallow: bool },
+    DeleteFile,
 
     CreateBranch { name: Name, new: bool },
     InspectBranch,
@@ -213,6 +294,15 @@ pub enum BlockState {
     Finished
 }
 
+#[derive(Arbitrary, Clone, Debug, PartialEq)]
+pub enum Delimiter {
+    None,
+    Json,
+    Line,
+    Sql,
+    Csv
+}
+
 async fn run(opts: Options) {
     let pachd_address = env::var("PACHD_ADDRESS").expect("No `PACHD_ADDRESS` set");
     let mut pfs_client = PfsClient::connect(pachd_address.clone()).await.unwrap();
@@ -221,6 +311,7 @@ async fn run(opts: Options) {
     let mut repos = Vec::new();
     let mut branches = Vec::<(String, String)>::new();
     let mut open_commits = Vec::<(String, String)>::new();
+    let mut files = Vec::new();
 
     delete_all(&mut pps_client, &mut pfs_client).await.unwrap();
 
@@ -253,6 +344,10 @@ async fn run(opts: Options) {
                     force,
                     all
                 }).await);
+
+                branches = Vec::new();
+                open_commits = Vec::new();
+                files = Vec::new();
             },
 
             Op::StartCommit => {
@@ -326,6 +421,8 @@ async fn run(opts: Options) {
                         id: last_branch,
                     })
                 }).await);
+
+                files = Vec::new();
             },
             Op::FlushCommit => {
                 let (last_repo, last_branch) = branches.last().unwrap().clone();
@@ -336,6 +433,143 @@ async fn run(opts: Options) {
                         id: last_branch,
                     }],
                     to_repos: Vec::default()
+                }).await);
+            },
+
+            Op::PutFile { open, path, bytes, delimiter, target_file_datums, target_file_bytes, header_records, overwrite_index } => {
+                let (last_repo, last_branch) = if open {
+                    open_commits.last().unwrap().clone()
+                } else {
+                    branches.last().unwrap().clone()
+                };
+
+                let req = pfs::PutFileRequest {
+                    file: Some(pfs::File {
+                        commit: Some(pfs::Commit {
+                            repo: Some(pfs::Repo { name: last_repo.clone() }),
+                            id: last_branch.clone(),
+                        }),
+                        path: path.clone(),
+                    }),
+                    value: bytes,
+                    url: "".to_string(),
+                    recursive: false,
+                    delimiter: match delimiter {
+                        Delimiter::None => pfs::Delimiter::None.into(),
+                        Delimiter::Json => pfs::Delimiter::Json.into(),
+                        Delimiter::Line => pfs::Delimiter::Line.into(),
+                        Delimiter::Sql => pfs::Delimiter::Sql.into(),
+                        Delimiter::Csv => pfs::Delimiter::Csv.into(),
+                    },
+                    target_file_datums,
+                    target_file_bytes,
+                    header_records,
+                    overwrite_index: overwrite_index.map(|index| pfs::OverwriteIndex { index }),
+                };
+
+                check(pfs_client.put_file(stream::iter(vec![req])).await);
+                files.push((last_repo, last_branch, path));
+            },
+            Op::GetFile { offset_bytes, size_bytes } => {
+                let (last_repo, last_branch, last_path) = files.last().unwrap().clone();
+
+                check(pfs_client.get_file(pfs::GetFileRequest {
+                    file: Some(pfs::File {
+                        commit: Some(pfs::Commit {
+                            repo: Some(pfs::Repo { name: last_repo }),
+                            id: last_branch,
+                        }),
+                        path: last_path,
+                    }),
+                    offset_bytes,
+                    size_bytes,
+                }).await);
+            },
+            Op::InspectFile => {
+                let (last_repo, last_branch, last_path) = files.last().unwrap().clone();
+
+                check(pfs_client.inspect_file(pfs::InspectFileRequest {
+                    file: Some(pfs::File {
+                        commit: Some(pfs::Commit {
+                            repo: Some(pfs::Repo { name: last_repo }),
+                            id: last_branch,
+                        }),
+                        path: last_path,
+                    }),
+                }).await);
+            },
+            Op::ListFile { full, history } => {
+                let (last_repo, last_branch) = branches.last().unwrap().clone();
+
+                check(pfs_client.list_file(pfs::ListFileRequest {
+                    file: Some(pfs::File {
+                        commit: Some(pfs::Commit {
+                            repo: Some(pfs::Repo { name: last_repo }),
+                            id: last_branch,
+                        }),
+                        path: "".to_string(),
+                    }),
+                    full,
+                    history,
+                }).await);
+            },
+            Op::WalkFile => {
+                let (last_repo, last_branch) = branches.last().unwrap().clone();
+
+                check(pfs_client.walk_file(pfs::WalkFileRequest {
+                    file: Some(pfs::File {
+                        commit: Some(pfs::Commit {
+                            repo: Some(pfs::Repo { name: last_repo }),
+                            id: last_branch,
+                        }),
+                        path: "".to_string(),
+                    }),
+                }).await);
+            },
+            Op::GlobFile { pattern } => {
+                let (last_repo, last_branch) = branches.last().unwrap().clone();
+
+                check(pfs_client.glob_file(pfs::GlobFileRequest {
+                    commit: Some(pfs::Commit {
+                        repo: Some(pfs::Repo { name: last_repo }),
+                        id: last_branch,
+                    }),
+                    pattern,
+                }).await);
+            },
+            Op::DiffFile { shallow } => {
+                let (first_repo, first_branch, first_path) = files[files.len()-2].clone();
+                let (second_repo, second_branch, second_path) = files[files.len()-1].clone();
+
+                check(pfs_client.diff_file(pfs::DiffFileRequest {
+                    old_file: Some(pfs::File {
+                        commit: Some(pfs::Commit {
+                            repo: Some(pfs::Repo { name: first_repo }),
+                            id: first_branch,
+                        }),
+                        path: first_path,
+                    }),
+                    new_file: Some(pfs::File {
+                        commit: Some(pfs::Commit {
+                            repo: Some(pfs::Repo { name: second_repo }),
+                            id: second_branch,
+                        }),
+                        path: second_path,
+                    }),
+                    shallow,
+                }).await);
+            },
+            Op::DeleteFile => {
+                let (last_repo, last_branch, last_path) = files.pop().unwrap();
+
+                check(pfs_client.delete_file(pfs::DeleteFileRequest {
+                    file: Some(pfs::File {
+                        commit: Some(pfs::Commit {
+                            repo: Some(pfs::Repo { name: last_repo }),
+                            id: last_branch,
+                        }),
+                        path: last_path,
+                    }),
                 }).await);
             },
 
@@ -393,6 +627,9 @@ async fn run(opts: Options) {
             Op::DeleteAll => {
                 pfs_client.delete_all(()).await.unwrap();
                 repos = Vec::new();
+                branches = Vec::new();
+                open_commits = Vec::new();
+                files = Vec::new();
             }
         }
     }
@@ -407,6 +644,5 @@ fuzz_target!(|opts: Options| {
     if !opts.valid() {
         return;
     }
-    println!("{:?}", opts);
     Runtime::new().unwrap().block_on(run(opts));
 });
