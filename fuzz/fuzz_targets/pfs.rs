@@ -47,7 +47,10 @@ impl Options {
 
         for op in &self.ops {
             match op {
-                Op::CreateRepo { name: _, update: _ } => {
+                Op::CreateRepo { name, update: _ } => {
+                    if !name.valid() {
+                        return false;
+                    }
                     repo_count += 1;
                 },
                 Op::InspectRepo => {
@@ -62,11 +65,8 @@ impl Options {
                     repo_count -= 1;
                 },
 
-                Op::CreateBranch { name: _, new } => {
-                    if repo_count == 0 {
-                        return false;
-                    }
-                    if !new && branch_count == 0 {
+                Op::CreateBranch { name, new } => {
+                    if !name.valid() || repo_count == 0 || (!new && branch_count == 0) {
                         return false;
                     }
                     branch_count += 1;
