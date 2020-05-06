@@ -139,6 +139,7 @@ enum Outro {
 async fn run(opts: Options) {
     let pachd_address = env::var("PACHD_ADDRESS").expect("No `PACHD_ADDRESS` set");
     let mut counter = 0;
+    let mut inserted_file = false;
     let mut last_corrupted = false;
     let mut pfs_client = PfsClient::connect(pachd_address.clone()).await.unwrap();
     let mut pps_client = PpsClient::connect(pachd_address.clone()).await.unwrap();
@@ -216,6 +217,8 @@ async fn run(opts: Options) {
                         to_repos: vec![],
                     }).await.unwrap();
                 }
+
+                inserted_file = true;
             },
             Op::UpdatePipeline { stats, reprocess } => {
                 create_pipeline(
@@ -286,21 +289,23 @@ async fn run(opts: Options) {
             assert_eq!(output_commit_before, output_commit_after);
             assert_eq!(jobs_before, jobs_after);
 
-            // ensure the file contents are restored
-            let file_bytes: Vec<Vec<u8>> = pfs_client.get_file(pfs::GetFileRequest {
-                file: Some(pfs::File {
-                    commit: Some(output_head_commit),
-                    path: "/test".to_string(),
-                }),
-                offset_bytes: 0,
-                size_bytes: 0,
-            }).await.unwrap().into_inner().try_collect::<Vec<Vec<u8>>>().await.unwrap();
-            let file_bytes = file_bytes.into_iter().flatten().collect::<Vec<u8>>();
+            if inserted_file {
+                // ensure the file contents are restored
+                let file_bytes: Vec<Vec<u8>> = pfs_client.get_file(pfs::GetFileRequest {
+                    file: Some(pfs::File {
+                        commit: Some(output_head_commit),
+                        path: "/test".to_string(),
+                    }),
+                    offset_bytes: 0,
+                    size_bytes: 0,
+                }).await.unwrap().into_inner().try_collect::<Vec<Vec<u8>>>().await.unwrap();
+                let file_bytes = file_bytes.into_iter().flatten().collect::<Vec<u8>>();
 
-            if last_corrupted {
-                assert_eq!(file_bytes, "corrupted".to_string().into_bytes());
-            } else {
-                assert_eq!(file_bytes, format!("{}", counter - 1).into_bytes());
+                if last_corrupted {
+                    assert_eq!(file_bytes, "corrupted".to_string().into_bytes());
+                } else {
+                    assert_eq!(file_bytes, format!("{}", counter - 1).into_bytes());
+                }
             }
         }
     }
