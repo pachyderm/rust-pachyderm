@@ -87,6 +87,7 @@ async fn extract(admin_client: &mut AdminClient<Channel>, no_objects: bool, no_r
 
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
 struct Options {
+    deferred: bool,
     ops: Vec<Op>,
     outro: Outro
 }
@@ -131,7 +132,11 @@ async fn run(opts: Options) {
         repo: Some(pfs::Repo {
             name: "fuzz_extract_restore_input".to_string(),
         }),
-        id: "master".to_string(),
+        id: if opts.deferred {
+            "staging".to_string()
+        } else {
+            "master".to_string()
+        },
     };
 
     let output_head_commit = pfs::Commit {
@@ -168,6 +173,20 @@ async fn run(opts: Options) {
                 }
             }
         }
+    }
+
+    if opts.deferred {
+        pfs_client.create_branch(pfs::CreateBranchRequest {
+            head: Some(input_head_commit.clone()),
+            branch: Some(pfs::Branch {
+                repo: Some(pfs::Repo {
+                    name: "fuzz_extract_restore_input".to_string()
+                }),
+                name: "master".to_string()
+            }),
+            s_branch: "".to_string(),
+            provenance: Vec::default(),
+        }).await.unwrap();
     }
 
     match opts.outro {
