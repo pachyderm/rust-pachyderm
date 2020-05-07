@@ -87,6 +87,14 @@ async fn inspect_commit(pfs_client: &mut PfsClient<Channel>, commit: pfs::Commit
     // these fields will change at extract/restore time, so don't compare them
     commit.started = None;
     commit.finished = None;
+
+    // values are allowed to rearrange here, so we sort them
+    commit.provenance.sort_unstable_by(|a, b| {
+        match (a.commit.as_ref(), b.commit.as_ref()) {
+            (Some(a), Some(b)) => a.id.cmp(&b.id),
+            (None, _) | (_, None) => unreachable!(),
+        }
+    });
     
     Ok(commit)
 }
