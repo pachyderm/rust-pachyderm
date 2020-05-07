@@ -244,7 +244,7 @@ async fn run(opts: Options) {
 
     }
 
-    if opts.deferred {
+    if opts.deferred && inserted_file {
         pfs_client.create_branch(pfs::CreateBranchRequest {
             head: Some(input_head_commit.clone()),
             branch: Some(pfs::Branch {
