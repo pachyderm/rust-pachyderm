@@ -66,11 +66,16 @@ impl Options {
                         return false;
                     }
                 },
-                Op::DeleteRepo { force: _, all: _ } => {
-                    if repo_count == 0 {
-                        return false;
+                Op::DeleteRepo { force: _, all } => {
+                    if *all {
+                        repo_count = 0;
+                    } else {
+                        if repo_count == 0 {
+                            return false;
+                        }
+                        repo_count -= 1;
                     }
-                    repo_count -= 1;
+
                     branch_count = 0;
                     open_commit_count = 0;
                     file_count = 0;
@@ -339,11 +344,21 @@ async fn run(opts: Options) {
             },
 
             Op::DeleteRepo { force, all } => {
-                check(pfs_client.delete_repo(pfs::DeleteRepoRequest {
-                    repo: Some(pfs::Repo { name: repos.pop().unwrap() }),
-                    force,
-                    all
-                }).await);
+                if all {
+                    check(pfs_client.delete_repo(pfs::DeleteRepoRequest {
+                        repo: None,
+                        force,
+                        all
+                    }).await);
+
+                    repos = Vec::new();
+                } else {
+                    check(pfs_client.delete_repo(pfs::DeleteRepoRequest {
+                        repo: Some(pfs::Repo { name: repos.pop().unwrap() }),
+                        force,
+                        all
+                    }).await);
+                }
 
                 branches = Vec::new();
                 open_commits = Vec::new();
