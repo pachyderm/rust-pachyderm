@@ -38,15 +38,17 @@ fn check<T>(result: Result<T, Status>) {
     }
 }
 
-#[derive(Arbitrary, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct Options {
     ops: Vec<Op>,
 }
 
-impl Options {
-    fn valid(&self) -> bool {
-        if self.ops.is_empty() || !self.ops.iter().all(|op| op.valid()) {
-            return false;
+impl Arbitrary for Options {
+    fn arbitrary(u: &mut Unstructured<'_>) -> arbitrary::Result<Self> {
+        let ops = Vec::<Op>::arbitrary(u)?;
+
+        if ops.is_empty() {
+            return Err(arbitrary::Error::NotEnoughData);
         }
 
         let mut repo_count = 0;
@@ -54,17 +56,15 @@ impl Options {
         let mut open_commit_count = 0;
         let mut file_count = 0;
 
-        for op in &self.ops {
+        for op in &ops {
             match op {
                 Op::CreateRepo { name, update: _ } => {
-                    if !name.valid() {
-                        return false;
-                    }
+                    name.validate()?;
                     repo_count += 1;
                 },
                 Op::InspectRepo => {
                     if repo_count == 0 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                 },
                 Op::DeleteRepo { force: _, all } => {
@@ -72,7 +72,7 @@ impl Options {
                         repo_count = 0;
                     } else {
                         if repo_count == 0 {
-                            return false;
+                            return Err(arbitrary::Error::IncorrectFormat);
                         }
                         repo_count -= 1;
                     }
@@ -84,36 +84,36 @@ impl Options {
 
                 Op::StartCommit => {
                     if branch_count == 0 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                     branch_count -= 1;
                     open_commit_count += 1;
                 },
                 Op::FinishCommit => {
                     if open_commit_count == 0 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                     open_commit_count -= 1;
                 },
                 Op::InspectCommit { block_state: _, open } => {
                     if (*open && open_commit_count == 0) || (!open && branch_count == 0) {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                 },
                 Op::ListCommit { number: _, reverse: _ } => {
                     if repo_count == 0 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                 },
                 Op::DeleteCommit { open } => {
                     if *open {
                         if open_commit_count == 0 {
-                            return false;
+                            return Err(arbitrary::Error::IncorrectFormat);
                         }
                         open_commit_count -= 1;
                     } else {
                         if branch_count == 0 {
-                            return false;
+                            return Err(arbitrary::Error::IncorrectFormat);
                         }
                         branch_count -= 1;
                     }
@@ -121,29 +121,30 @@ impl Options {
                 },
                 Op::FlushCommit => {
                     if branch_count == 0 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                 },
 
                 Op::CreateBranch { name, new } => {
-                    if !name.valid() || repo_count == 0 || (!new && branch_count == 0) {
-                        return false;
+                    name.validate()?;
+                    if repo_count == 0 || (!new && branch_count == 0) {
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                     branch_count += 1;
                 },
                 Op::InspectBranch => {
                     if branch_count == 0 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                 },
                 Op::ListBranch { reverse: _ } => {
                     if repo_count == 0 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                 }
                 Op::DeleteBranch { force: _ } => {
                     if branch_count == 0 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                     file_count = 0;
                 },
@@ -151,48 +152,48 @@ impl Options {
                 Op::PutFile { open, path: _, bytes: _, delimiter: _, target_file_datums: _, target_file_bytes: _, header_records: _, overwrite_index: _ } => {
                     if *open {
                         if open_commit_count == 0 {
-                            return false;
+                            return Err(arbitrary::Error::IncorrectFormat);
                         }
                     } else {
                         if branch_count == 0 {
-                            return false;
+                            return Err(arbitrary::Error::IncorrectFormat);
                         }
                     }
                     file_count += 1;
                 },
                 Op::GetFile { offset_bytes: _, size_bytes: _ } => {
                     if file_count == 0 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                 },
                 Op::InspectFile => {
                     if file_count == 0 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                 },
                 Op::ListFile { full: _, history: _ } => {
                     if branch_count == 0 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                 },
                 Op::WalkFile => {
                     if branch_count == 0 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                 },
                 Op::GlobFile { pattern: _ } => {
                     if branch_count == 0 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                 },
                 Op::DiffFile { shallow: _ } => {
                     if file_count < 2 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                 },
                 Op::DeleteFile => {
                     if file_count == 0 {
-                        return false;
+                        return Err(arbitrary::Error::IncorrectFormat);
                     }
                     file_count -= 1;
                 },
@@ -207,7 +208,7 @@ impl Options {
             }
         }
 
-        true
+        Ok(Options { ops })
     }
 }
 
@@ -252,23 +253,18 @@ enum Op {
     DeleteAll,
 }
 
-impl Op {
-    fn valid(&self) -> bool {
-        match self {
-            Op::CreateRepo { name, update: _ } => name.valid(),
-            _ => true
-        }
-    }
-}
-
 #[derive(Clone, PartialEq)]
 struct Name {
     bytes: Vec<u8>
 }
 
 impl Name {
-    fn valid(&self) -> bool {
-        self.bytes.len() > 0
+    fn validate(&self) -> Result<(), arbitrary::Error> {
+        if self.bytes.is_empty() {
+            Err(arbitrary::Error::NotEnoughData)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -663,8 +659,5 @@ async fn run(opts: Options) {
 }
 
 fuzz_target!(|opts: Options| {
-    if !opts.valid() {
-        return;
-    }
     Runtime::new().unwrap().block_on(run(opts));
 });
