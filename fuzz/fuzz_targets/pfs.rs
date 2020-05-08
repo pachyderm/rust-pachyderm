@@ -1,6 +1,7 @@
 #![no_main]
 
 use std::env;
+use std::fmt;
 
 use pachyderm::pfs;
 use pachyderm::pfs::api_client::ApiClient as PfsClient;
@@ -260,7 +261,7 @@ impl Op {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 struct Name {
     bytes: Vec<u8>
 }
@@ -278,6 +279,12 @@ impl ToString for Name {
         // `base64::Config` for this custom encoding.
         let s = base64::encode(&self.bytes);
         s.replace("+", "_").replace("/", "_").replace("=", "-")
+    }
+}
+
+impl fmt::Debug for Name {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.to_string())
     }
 }
 
