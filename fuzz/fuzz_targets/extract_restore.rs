@@ -1,5 +1,13 @@
 #![no_main]
 
+//! Fuzzes extract/restore. These operations act as pachyderm's backup/restore
+//! mechanism, so proper functionality is vital. We test a number of
+//! conditions here, though they follow the same basic structure:
+//!
+//! 1) There is one input repo with one file, that may or may not be updated.
+//! 2) There is one pipeline that copies contents from the input repo to the
+//!    output repo, and may or may not fail.
+
 use std::env;
 
 use pachyderm::pfs;
@@ -18,15 +26,18 @@ use tonic::transport::Channel;
 use tonic::{Code, Status};
 use pretty_assertions::assert_eq;
 
+/// The base pipeline source code
 const BASE_PIPELINE_CODE: &'static str = "
 cp /pfs/fuzz_extract_restore_input/* /pfs/out/
 test \"$(cat /pfs/out/test)\" != \"corrupted\"
 ";
 
+/// The new pipeline source code, if it is updated
 const UPDATED_PIPELINE_CODE: &'static str = "
 cp /pfs/fuzz_extract_restore_input/* /pfs/out/
 ";
 
+/// Creates a pipeline PFS input object
 fn create_pfs_input(glob: &str, repo: &str) -> pps::Input {
     let mut pfs_input = pps::PfsInput::default();
     pfs_input.glob = glob.into();
@@ -38,6 +49,7 @@ fn create_pfs_input(glob: &str, repo: &str) -> pps::Input {
     input
 }
 
+/// Creates or updates a pipeline
 async fn create_pipeline(
     pps_client: &mut PpsClient<Channel>,
     name: &str,
@@ -66,12 +78,16 @@ async fn create_pipeline(
     Ok(())
 }
 
+/// Deletes everything in the cluster
 async fn delete_all(pps_client: &mut PpsClient<Channel>, pfs_client: &mut PfsClient<Channel>) -> Result<(), Status> {
     pps_client.delete_all(()).await?;
     pfs_client.delete_all(()).await?;
     Ok(())
 }
 
+/// Inspects a given commit, returning an `CommitInfo` object with fields that
+/// have been modified such that they can be compared with other `CommitInfo`
+/// objects.
 async fn inspect_commit(pfs_client: &mut PfsClient<Channel>, commit: pfs::Commit) -> Result<pfs::CommitInfo, Code> {
     // just extract out the error code (if any), so that errors can be
     // compared with `assert_eq`
@@ -99,6 +115,7 @@ async fn inspect_commit(pfs_client: &mut PfsClient<Channel>, commit: pfs::Commit
     Ok(commit)
 }
 
+/// Lists jobs.
 async fn list_jobs(pps_client: &mut PpsClient<Channel>) -> Result<pps::JobInfos, Code> {
     // just extract out the error code (if any), so that errors can be
     // compared with `assert_eq`
@@ -116,6 +133,7 @@ async fn list_jobs(pps_client: &mut PpsClient<Channel>) -> Result<pps::JobInfos,
     Ok(jobs)
 }
 
+/// Extracts.
 async fn extract(admin_client: &mut AdminClient<Channel>, no_objects: bool, no_repos: bool, no_pipelines: bool) -> Result<Vec<admin::Op>, Status> {
     admin_client.extract(admin::ExtractRequest {
         url: "".to_string(),
@@ -125,25 +143,51 @@ async fn extract(admin_client: &mut AdminClient<Channel>, no_objects: bool, no_r
     }).await.unwrap().into_inner().try_collect::<Vec<admin::Op>>().await
 }
 
+/// Specifies operations for a fuzz run pass.
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
 struct Options {
+    /// Whether we should test a "deferred" workload, i.e. one where changes
+    /// are committed to a staging branch, which is "merged" into master
+    /// before extract/restore.
     deferred: bool,
+    /// The operations to run.
     ops: Vec<Op>,
+    /// Specifies the sort of extract/restore operation to run.
     outro: Outro
 }
 
+/// An operation to run before extract/restore.
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
 enum Op {
-    PutFile { corrupted: bool, flush: bool },
-    UpdatePipeline { stats: bool, reprocess: bool }
+    /// Puts a file.
+    PutFile {
+        /// Whether to put a "corrupted" file, which will trigger a failure in
+        /// the downstream pipeline.
+        corrupted: bool,
+        /// Whether to flush the commit after putting the file.
+        flush: bool
+    },
+    /// Updates a pipeline.
+    UpdatePipeline {
+        /// Whether stats are enabled on the updated pipeline.
+        stats: bool,
+        /// whether to reprocess everything.
+        reprocess: bool
+    }
 }
 
+/// Specifies the sort of extract/restore operation to run.
 #[derive(Arbitrary, Clone, Debug, PartialEq)]
 enum Outro {
+    /// Just extract, don't restore. Because no restoration is done, we can
+    /// test all of the extract options - some of which would otherwise fail
+    /// expectedly during a restore.
     Extract { no_objects: bool, no_repos: bool, no_pipelines: bool },
+    /// Run an extract and restore.
     ExtractRestore { no_objects: bool },
 }
 
+/// Executes a fuzz run pass.
 async fn run(opts: Options) {
     let pachd_address = env::var("PACHD_ADDRESS").expect("No `PACHD_ADDRESS` set");
     let mut counter = 0;
