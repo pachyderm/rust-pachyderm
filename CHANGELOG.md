@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+- Support for pachyderm v1.11.
+- Added fuzzers for some pachyderm functionality.
+
 ## 0.3.0
 
 Support pachyderm v1.10.
