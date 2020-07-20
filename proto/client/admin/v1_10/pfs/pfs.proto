@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-package pfs;
-option go_package = "github.com/pachyderm/pachyderm/src/client/pfs";
+package pfs_1_10;
+option go_package = "github.com/pachyderm/pachyderm/src/client/admin/v1_10/pfs";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
@@ -9,7 +9,7 @@ import "google/protobuf/wrappers.proto";
 
 
 
-import "client/auth/auth.proto";
+import "client/admin/v1_10/auth/auth.proto";
 
 ////  PFS Data structures (stored in etcd)
 
@@ -76,7 +76,7 @@ message RepoInfo {
 message RepoAuthInfo {
   // The callers access level to the relevant repo (e.g. may be OWNER even if
   // the user isn't an OWNER of the repo, if they're an admin for the cluster)
-  auth.Scope access_level = 1;
+  auth_1_10.Scope access_level = 1;
 }
 
 // These are the different places where a commit may be originated from
@@ -184,13 +184,11 @@ message ObjectInfo {
 }
 
 message Compaction {
-  repeated string input_prefixes = 2;
+  repeated string prefixes = 1;
 }
 
 message Shard {
-  Compaction compaction = 1;
-  PathRange range = 2;
-  string output_path = 3;
+  PathRange range = 1;
 }
 
 message PathRange {
@@ -248,7 +246,6 @@ message BuildCommitRequest {
   reserved 2;
   Commit parent = 1;
   string branch = 4;
-  CommitOrigin origin = 12;
   repeated CommitProvenance provenance = 6;
   Object tree = 3;
   repeated Object trees = 7;
@@ -398,10 +395,6 @@ message PutFileRequest {
   // overwrite_index is the object index where the write starts from.  All
   // existing objects starting from the index are deleted.
   OverwriteIndex overwrite_index = 10;
-  // delete indicates that the file should be deleted, this is redundant with
-  // DeleteFile, but is necessary because it allows you to send file deletes
-  // atomically with other PutFile operations.
-  bool delete = 12;
 }
 
 // PutFileRecord is used to record PutFile requests in etcd temporarily.
@@ -496,69 +489,15 @@ message FsckResponse {
   string error = 2;
 }
 
-// Messages specific to Pachyderm 2.
+// Messages specific to the new storage layer.
 
-message FileInfoV2 {
-  File file = 1;
-  string hash = 2;
-}
-
-// PutTar Protocol:
-//   Client sends an initial request with only the commit field set.
-//   For each tar stream to put:
-//     If the client wants to tag the tar stream:
-//       Client sends a request with the tag field set (the first batch
-//       of data can be optionally sent with this request).
-//     For bytes in the tar stream:
-//       Client sends a request with the bytes stored in the data field.
-//     Client sends a request with the EOF field set to true.
-//   Client connection is closed.
-
-message FileOperationRequestV2 {
+message PutTarRequest {
   Commit commit = 1;
-  oneof operation {
-    PutTarRequestV2 put_tar = 2;
-    DeleteFilesRequestV2 delete_files = 3;
-  }
-}
-
-message PutTarRequestV2 {
-  string tag = 1;
   bytes data = 2;
-  bool EOF = 3;
 }
 
-message DeleteFilesRequestV2 {
-  repeated string files = 1; 
-  string tag = 2;
-}
-
-message GetTarRequestV2 {
+message GetTarRequest {
   File file = 1;
-}
-
-// GetTarConditional Protocol:
-//   Client sends an initial request that is similar to a GetTar request.
-//   For files that match the request:
-//     Server sends a response with the file info for the file.
-//     If the client wants to skip the file content:
-//       Client sends a request with the skip field set to true.
-//     Else
-//       Client sends a request with the skip field set to false.
-//       For file content:
-//         Server sends a response with file content in the data field.
-//       Server sends a response with the EOF field set to true.
-//   Server connection is closed by returning from handler.
-
-message GetTarConditionalRequestV2 {
-  File file = 1;
-  bool skip = 2;
-}
-
-message GetTarConditionalResponseV2 {
-  FileInfoV2 file_info = 1;
-  bytes data = 2;
-  bool EOF = 3;
 }
 
 service API {
@@ -638,13 +577,9 @@ service API {
   // Fsck does a file system consistency check for pfs
   rpc Fsck(FsckRequest) returns (stream FsckResponse) {}
 
-  // RPCs specific to Pachyderm 2.
-  rpc FileOperationV2(stream FileOperationRequestV2) returns (google.protobuf.Empty) {}
-  rpc GetTarV2(GetTarRequestV2) returns (stream google.protobuf.BytesValue) {}
-  // Refer to the GetTarConditionalRequest / GetTarConditionalResponse message definitions for the protocol.
-  rpc GetTarConditionalV2(stream GetTarConditionalRequestV2) returns (stream GetTarConditionalResponseV2) {}
-  rpc ListFileV2(ListFileRequest) returns (stream FileInfoV2) {}
-  rpc GlobFileV2(GlobFileRequest) returns (stream FileInfoV2) {}
+  // RPCs specific to the new storage layer.
+  rpc PutTar(stream PutTarRequest) returns (google.protobuf.Empty) {}
+  rpc GetTar(GetTarRequest) returns (stream google.protobuf.BytesValue) {}
 }
 
 message PutObjectRequest {
