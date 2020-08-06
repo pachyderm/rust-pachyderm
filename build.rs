@@ -60,6 +60,7 @@ fn run() -> Result<(), BuildError> {
 
     tonic_build::configure()
         .build_server(false)
+        .format(false) // disable code formatting since docs.rs will otherwise break
         .compile(&protos.as_slice(), &["./proto".into()])?;
 
     Ok(())
